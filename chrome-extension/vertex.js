@@ -181,3 +181,78 @@ export function withTimeout(promise, ms, controller) {
     );
   });
 }
+
+// callGeminiWithSearch — uses Vertex's NATIVE `:generateContent` endpoint
+// (NOT the OpenAI-compat chat/completions surface) because the OpenAI-compat
+// layer does not pass Gemini's `googleSearch` grounding tool through.
+// Confirmed in v0.5.1 production: a tools:[{googleSearch:{}}] field on the
+// OpenAI-compat endpoint is silently ignored, citation cards never appeared.
+//
+// This is the ONLY path that hits the native Gemini endpoint shape — every
+// other role still routes through callVertex(role, messages, opts) on the
+// OpenAI-compat surface. Used solely by retrieveCitation in background.js.
+//
+// Response is returned raw; caller uses extractGroundedCitation to pull
+// the source URL out of candidates[].groundingMetadata.groundingChunks[].web.
+export async function callGeminiWithSearch(systemPrompt, userPrompt, opts = {}) {
+  const {
+    maxTokens = 800,
+    temperature = 0.0,
+    signal = null,
+    modelSlug = "gemini-2.5-flash",
+    region = "global",
+  } = opts;
+  const { token, projectId } = await getAuthAndProject();
+  const host = region === "global"
+    ? "aiplatform.googleapis.com"
+    : `${region}-aiplatform.googleapis.com`;
+  const safeProject = encodeURIComponent(projectId);
+  const url = `https://${host}/v1beta1/projects/${safeProject}/locations/${region}/publishers/google/models/${encodeURIComponent(modelSlug)}:generateContent`;
+  const body = {
+    systemInstruction: { parts: [{ text: systemPrompt }] },
+    contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+    tools: [{ googleSearch: {} }],
+    generationConfig: {
+      temperature,
+      maxOutputTokens: maxTokens,
+      thinkingConfig: { thinkingBudget: 0 },
+    },
+  };
+  const fetchOpts = {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  };
+  if (signal) fetchOpts.signal = signal;
+  const resp = await fetch(url, fetchOpts);
+  if (!resp.ok) {
+    const truncated = (await resp.text()).slice(0, 300);
+    if (resp.status === 401) throw new Error(`Gemini-native 401 — access token expired. Refresh in Options. (${truncated})`);
+    if (resp.status === 403) throw new Error(`Gemini-native 403 — project lacks Gemini access. (${truncated})`);
+    throw new Error(`Gemini-native HTTP ${resp.status}: ${truncated}`);
+  }
+  return await resp.json();
+}
+
+// extractGroundedCitation — pull source URL + model summary from a
+// callGeminiWithSearch response. groundingMetadata.groundingChunks[].web
+// is where Gemini reports the URLs it consulted. Returns null when the
+// response was not grounded (model answered from training data without
+// triggering a search) — we don't fabricate citations.
+export function extractGroundedCitation(geminiResp) {
+  const candidate = geminiResp?.candidates?.[0];
+  if (!candidate) return null;
+  const text = (candidate.content?.parts || []).map((p) => p.text || "").join("").trim();
+  if (!text || /^NONE\.?$/i.test(text)) return null;
+  const chunks = candidate.groundingMetadata?.groundingChunks || [];
+  for (const c of chunks) {
+    const url = c.web?.uri || "";
+    if (!/^https?:\/\//i.test(url)) continue;
+    return {
+      url,
+      title: String(c.web?.title || url).slice(0, 120),
+      excerpt: text.slice(0, 240),
+    };
+  }
+  return null;
+}

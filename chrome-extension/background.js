@@ -30,7 +30,10 @@
 import { MODE_PROMPTS, MODE_TAGS, CHITCHAT_SYS, ANTI_RESTATE_KEEP,
          buildPreamble, buildUserMsg } from "./prompts.js";
 import { postProcess, parseConsensusVerdict } from "./format_guard.js";
-import { callVertex, extractText, toMessages, withTimeout } from "./vertex.js";
+import {
+  callVertex, extractText, toMessages, withTimeout,
+  callGeminiWithSearch, extractGroundedCitation,
+} from "./vertex.js";
 import { aggregateConsensus, sanitizeUploaderText, sanitizeError,
          V9_DEAD_STORAGE_KEYS } from "./consensus.js";
 
@@ -102,17 +105,16 @@ const CITATION_PROFILES = {
 
 function buildCitationSystemPrompt(sourcePref) {
   const profile = CITATION_PROFILES[sourcePref] || CITATION_PROFILES.primary;
-  return `You verify factual claims for a real-time YouTube fact-checker. Use Google Search to find ONE authoritative source for the given fact-check note.
+  return `You verify factual claims for a real-time YouTube fact-checker. You have Google Search available as a tool; USE IT — do not answer from memory. Find ONE authoritative source for the given fact-check note.
 
 Source preference for this user:
 ${profile}
 
 Across all profiles: prefer reporting/news-desk content over opinion or editorial sections of the same outlet. Avoid pseudo-news content farms regardless of political alignment.
 
-After searching, output EXACTLY one JSON object as your last content (and nothing else), with no markdown fences:
-{"url":"https://...","title":"page title","excerpt":"one-sentence summary of what the source says about the note"}
+Output format: ONE concise sentence (≤30 words) describing what the most authoritative source you found says about the note. Do NOT include URLs in your text — the grounding system attaches the source URL automatically.
 
-If no authoritative source within the preferred profile is found, output exactly: NONE`;
+If no authoritative source within the preferred profile is available, output exactly: NONE`;
 }
 
 // withPrimaryTimeout — wraps a callBackend Promise in an AbortController +
@@ -124,40 +126,29 @@ function withPrimaryTimeout(fn, ms) {
   return withTimeout(fn(controller), ms, controller);
 }
 
-// retrieveCitation — best-effort citation through Gemini Flash with the
-// Google Search grounding tool. v9 used Anthropic's web_search_20250305;
-// that vendor is no longer wired in. The OpenAI-compat surface accepts a
-// `tools: [{"googleSearch": {}}]` field per Gemini's native grounding
-// behavior. If grounding does not return a usable URL the function returns
-// null and the card renders without a source — the existing graceful-
-// degradation path from v9 is preserved.
+// retrieveCitation — best-effort grounded citation through Gemini Flash.
+//
+// v0.5.2 (2026-05-21): switched from the OpenAI-compat chat/completions
+// surface (which silently ignored the googleSearch tool) to the native
+// :generateContent endpoint via callGeminiWithSearch. Source URL now comes
+// from candidates[].groundingMetadata.groundingChunks[].web — no fragile
+// JSON-in-text extraction. The model's narrative becomes the excerpt.
+//
+// If the model didn't actually invoke search (groundingChunks empty), or
+// emitted NONE, extractGroundedCitation returns null and no citation card
+// renders — same graceful-degradation contract as before.
 async function retrieveCitation({ flagText, sourcePref }) {
   const sys = buildCitationSystemPrompt(sourcePref);
   try {
     const resp = await withPrimaryTimeout(
-      (controller) => callVertex(
-        "citation",
-        toMessages(sys, `Fact-check note:\n${flagText}`),
-        {
-          maxTokens: 500,
-          temperature: 0.0,
-          tools: [{ googleSearch: {} }],
-          signal: controller.signal,
-        },
+      (controller) => callGeminiWithSearch(
+        sys,
+        `Fact-check note:\n${flagText}`,
+        { maxTokens: 800, temperature: 0.0, signal: controller.signal },
       ),
       PRIMARY_TIMEOUT_MS,
     );
-    const text = extractText(resp);
-    if (!text || /^NONE\.?$/i.test(text.trim())) return null;
-    const jsonMatch = text.match(/\{[^{}]*"url"\s*:[^{}]*"excerpt"\s*:[^{}]*\}/);
-    if (!jsonMatch) return null;
-    const parsed = JSON.parse(jsonMatch[0]);
-    if (!parsed.url || !/^https?:\/\//i.test(parsed.url)) return null;
-    return {
-      url: String(parsed.url),
-      title: String(parsed.title || parsed.url).slice(0, 120),
-      excerpt: String(parsed.excerpt || "").slice(0, 240),
-    };
+    return extractGroundedCitation(resp);
   } catch (_e) {
     return null;
   }
@@ -214,7 +205,14 @@ Briefing:`;
   try {
     const resp = await withPrimaryTimeout(
       (controller) => callVertex("dossier", toMessages(sys, user), {
-        maxTokens: 320,
+        // v0.5.2: was 320, which was a Gemini Flash-era budget. Gemini Pro
+        // with thinking enabled (the dossier role intentionally allows
+        // thinking) burns 200-500 reasoning tokens BEFORE output starts.
+        // At maxTokens=320, real briefings truncated mid-sentence. 2000
+        // covers ~500 thinking + ~1500 output (~250 words), and the
+        // ≤120-word system instruction caps the actual emitted text well
+        // below that ceiling.
+        maxTokens: 2000,
         temperature: 0.4,
         signal: controller.signal,
       }),

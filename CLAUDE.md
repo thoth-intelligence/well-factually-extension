@@ -2,10 +2,12 @@
 
 Chrome MV3 extension that streams fact-flag cards alongside YouTube videos. Cloud path uses Google Vertex AI (Gemini for the primary classifier, with optional multi-vendor consensus voices). Local path uses LM Studio for fully on-device inference.
 
-## Current state (2026-05-19)
+## Current state (2026-05-21)
 
-- Shipped on disk: **v9** (manifest 0.3.0). Nine features confirmed working — pre-roll dossier, citation retrieval, bias-balanced sourcing profiles, cross-model consensus, in-video chyron, confidence-tinted cards, click-to-jump, session export, traffic-light emoji + heartbeat ghost cards.
-- Going-forward target: **v9.5-Gemini-Grok-Llama**. Full spec at `docs/v9.5-Gemini-Grok-Llama-spec.md`. Pivot reasoning: Anthropic-on-Vertex quota is gated on a 48h+ new-project wait, so v9.5 routes Gemini as primary (covered by GCP credits) and adds Meta Llama 4 Maverick + xAI Grok 4.1 Fast Reasoning as the consensus voices via Vertex's OpenAI-compatible chat-completions endpoint. Anthropic Claude becomes a v9.6 delta-spec once regional Haiku/Sonnet quotas land.
+- Shipped on disk: **v9.5** (manifest 0.5.0). Vertex AI as the cloud backend — Gemini 2.5 Flash drives the per-segment classifier / chitchat gate / citation retriever, Gemini 2.5 Pro drives the pre-roll dossier. Llama 4 Maverick (Meta), Grok 4.1 Fast Reasoning (xAI), and Claude Haiku 4.5 (Anthropic) wire up as opt-in consensus voices on confidence-4/5 flags. All voices route through the same Vertex OpenAI-compatible `chat/completions` endpoint at `locations/global`.
+- Auth track for v9.5: bearer-token paste field in Options (user runs `gcloud auth print-access-token` and pastes; 60-minute lifespan). v9.5.1 will layer `chrome.identity` OAuth on top of `vertex.js`'s `getAccessToken()` without changing any caller.
+- Anthropic Claude Sonnet 4.5 sits behind a conditional Vertex enablement that may still be pending; only Haiku 4.5 is wired up for v9.5. Sonnet flips on as a one-row registry change once Anthropic approves.
+- Going-forward target: v9.5.1 (auto-refreshing OAuth, live key validation on Save, m.youtube.com + Shorts manifest patches). See `docs/v9.5-Gemini-Grok-Llama-spec.md` for the implementation history.
 - Build invariant: **PII-clean**. No project names, partner names, client identifiers, internal codenames, or specific named entities anywhere in shipped source. Memory files in `~/Library/Application Support/Claude/` are exempt (private dev context).
 - Identity in all shipped artifacts: **Dave Smith**. Real personal identity stays out of code.
 
@@ -37,29 +39,39 @@ LICENSE                                    MIT.
 - For YouTube DOM scraping, use the `firstNonEmpty(...selectors)` helper — comma-separated `querySelector` picks first match in DOM document order, not selector list order. That gotcha broke the dossier path in May 2026.
 - Build invariant: when packing for release, build the zip in `/tmp` then `cat /tmp/build.zip > "$DEST/<name>.zip"`. Atomic rename fails on iCloud Drive.
 
-## v9.5-Gemini-Grok-Llama model lineup
+## v9.5 model lineup
 
-| Role | Model | Endpoint location | Slug |
+| Role | Model | Endpoint | Slug |
 |---|---|---|---|
 | Per-segment classifier | Gemini 2.5 Flash | global | `google/gemini-2.5-flash` (with `thinking_budget: 0`) |
 | Pre-roll dossier | Gemini 2.5 Pro | global | `google/gemini-2.5-pro` (thinking allowed) |
 | Chitchat off-topic gate | Gemini 2.5 Flash | global | same as primary, `thinking_budget: 0` |
-| Citation retrieval | Gemini 2.5 Flash | global | same, `thinking_budget: 0` |
-| Consensus voice (conf-4/5 only, opt-in) | Llama 4 Maverick | **us-east5** | `meta/llama-4-maverick-17b-128e-instruct-maas` |
+| Citation retrieval | Gemini 2.5 Flash + Google Search tool | global | same, `thinking_budget: 0`, `tools: [{googleSearch:{}}]` |
+| Consensus voice (conf-4/5 only, opt-in) | Llama 4 Maverick | global | `meta/llama-4-maverick-17b-128e-instruct-maas` |
 | Consensus voice (conf-4/5 only, opt-in) | Grok 4.1 Fast Reasoning | global | `xai/grok-4.1-fast-reasoning` |
+| Consensus voice (conf-4/5 only, opt-in) | Claude Haiku 4.5 | global | `anthropic/claude-haiku-4-5@20251001` |
 
-All routed through `https://{region}-aiplatform.googleapis.com/v1beta1/projects/{P}/locations/{region}/endpoints/openapi/chat/completions` (or `aiplatform.googleapis.com/...locations/global/...` for global). Same OpenAI-compatible request schema across all three vendors.
+Single source of truth: `chrome-extension/vertex.js` `MODEL_REGISTRY`. Add a row to enable a model (e.g. Sonnet 4.5 in v9.5.1, or any future voice); no other file changes.
 
-**Cost note on Grok:** Vertex injects a ~664-token system wrapper into every Grok call (confirmed via smoke test — a 5-token user message returned `prompt_tokens: 664`). Restrict Grok firing to conf-4/5 cards only to keep cost predictable.
+All voices route through the GLOBAL endpoint per the 2026-05-21 addendum:
+`https://aiplatform.googleapis.com/v1beta1/projects/{P}/locations/global/endpoints/openapi/chat/completions`
+
+## Vendor gotchas
+
+- **Gemini OpenAI-compat thinking control** — `extra_body.google.thinking_config.thinking_budget: 0` is the verified key path for disabling reasoning tokens on Vertex's OpenAI-compat endpoint. Applied to classifier / chitchat / citation roles in `vertex.js`. The dossier role intentionally omits it (~188 reasoning tokens observed on trivial responses; acceptable on a pre-roll path).
+- **Grok 664-token wrapper** — every Grok call costs ~660 prompt tokens before the user message because the Vertex/xAI gateway injects a system wrapper. Restrict Grok firing to conf-4/5 cards only (already gated in `runConsensus`). Surfaced to users via tooltip on the Grok checkbox.
+- **Llama region migration** — Llama 4 Maverick smoke-tested as us-east5-only in May 2026, but the 2026-05-21 addendum moved it to `global` along with everything else. If global doesn't serve Llama in practice, the 4-second consensus timeout produces a silent no-vote and Gemini+Grok+Claude still form a consensus. We do NOT add region-fallback logic — fallbacks happen at the voice level, not the region level.
+- **Claude on Vertex — global only, three separate quotas** — Anthropic on Vertex uses the global endpoint exclusively. Do NOT set `CLOUD_ML_REGION`, do NOT hardcode `/locations/us-east5/` for Claude. Quotas are per-model: `global_online_prediction_input_tokens_per_minute_per_base_model`, `..._output_tokens_...`, and `..._requests_...`. `callConsensusVoice` in `background.js` retries Claude once on HTTP 429 with a 500ms backoff, then silent voice-fallback. Never surface a throttle to the user. Sonnet 4.5 (`anthropic/claude-sonnet-4-5@20250929`) approval may still be pending — on 400 "model not available", the voice no-votes silently.
+- **Auth track for v9.5** — bearer-paste Options field. `gcloud auth print-access-token` produces a 60-minute token. ADC + service-account JSON keys are blocked at the org level by Secure-by-Default. v9.5.1 layers `chrome.identity` OAuth on top of `getAccessToken()` in `vertex.js`.
 
 ## Auth
 
-Two tracks documented in the v9.5 spec:
+v9.5 ships with the **bearer-paste track** (D1=B per the v9.5 implementation kickoff):
 
-- **Dev (solo)**: service account JSON via `GOOGLE_APPLICATION_CREDENTIALS`. JWT signed in the service worker using SubtleCrypto (no `jsonwebtoken` dependency).
-- **Distribution (public)**: `chrome.identity` OAuth — user clicks "Sign in with Google" once, extension uses the resulting access token for Vertex AI calls. Auto-refreshes via `chrome.identity.getAuthToken({ interactive: false })`.
-
-Note: at the time of migration, `iam.disableServiceAccountKeyCreation` was enforced at the org level via Secure-by-Default and did not honor project-level overrides. Workaround for ongoing dev: use `gcloud auth print-access-token` short-lived bearer tokens. Long-term: disable the org-level enforcement once the project graduates from contest-submission phase.
+- User runs `gcloud auth print-access-token` and pastes the result into the Options form. The token lives in `chrome.storage.local` and is read by `vertex.js getAccessToken()` on every Vertex call.
+- Token expiry (~60 min) surfaces as a 401 → "access token expired" error card. User re-pastes.
+- `iam.disableServiceAccountKeyCreation` is enforced at the org level via Secure-by-Default and does not honor project-level overrides. We do NOT pursue SA-JWT auth — it's blocked.
+- **v9.5.1 layer**: `chrome.identity.getAuthToken({ interactive: false })` replaces the bearer-paste field. Requires registering a Web Application OAuth client in the GCP project and adding `oauth2.client_id` to `manifest.json`. Caller signature in `vertex.js` doesn't change.
 
 ## Build + release
 
@@ -78,9 +90,9 @@ gh release create v<version> \
 
 ## Known open work
 
-- **v9.5 implementation**, end-to-end per `docs/v9.5-Gemini-Grok-Llama-spec.md`. Estimated 1.5 working days.
-- **Four smoke-test bugs** carried over from v9: `m.youtube.com` listed in `host_permissions` but not in `content_scripts.matches`, no YouTube Shorts URL support, chitchat gate hardcodes Haiku via `overrideModel` (needs to switch to Gemini Flash per v9.5), no live API-key validation on Save (invalid keys fail silently until first call). See `docs/smoke-test-report.md`.
-- **v9 chyron + consensus paths** haven't been live-verified on a conf-4/5 firing clip. The Murray/Smith JRE smoke-test only produced conf-2/3 cards. Re-test after v9.5 ships with a clip that has hard-number claims.
+- **v9.5.1**: layer `chrome.identity` OAuth on top of `vertex.js` `getAccessToken()` so the access token refreshes automatically; live Vertex-token validation on Save (still partially open — Options has a Test connection button but no auto-check); `m.youtube.com/watch*` and `/shorts/*` manifest patches (two of the four v9 smoke-test bugs); copy-as-quote + share buttons on each card.
+- **v9 chyron + consensus paths** haven't been live-verified on a conf-4/5 firing clip. The Murray/Smith JRE smoke-test only produced conf-2/3 cards. Re-test on a clip with hard-number claims now that v9.5 is in disk.
+- **Claude Sonnet 4.5** approval status — Anthropic enablement may still be pending. When approved, uncomment the Sonnet row in `vertex.js MODEL_REGISTRY` and add a Sonnet checkbox + tooltip to Options (mirror the Haiku row).
 - **10+ unshipped features** in `docs/roadmap.md`, plus a packaging-strategy decision (smart onboarding vs. Homebrew tap vs. signed installer) deferred to post-contest.
 
 ## Out of scope here

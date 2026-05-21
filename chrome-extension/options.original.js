@@ -1,18 +1,9 @@
-// Options page controller for v9.5-Gemini-Grok-Llama.
-// v9's per-vendor secondary keys (openaiKey/geminiKey/etc.) are gone: every
-// cloud voice now routes through Vertex's OpenAI-compat endpoint with a
-// single bearer token. v9's `apiKey` (Anthropic-direct) and `model` (claude-
-// haiku/sonnet selector) are likewise gone. Old storage values are
-// effectively dead keys — harmless, will get GC'd on next /clear.
-
 const els = {
   backend: document.getElementById("backend"),
-  backendVertex: document.getElementById("backend-vertex"),
+  backendAnthropic: document.getElementById("backend-anthropic"),
   backendLmstudio: document.getElementById("backend-lmstudio"),
-  gcpProjectId: document.getElementById("gcpProjectId"),
-  vertexBearerToken: document.getElementById("vertexBearerToken"),
-  vertexTest: document.getElementById("vertexTest"),
-  vertexStatus: document.getElementById("vertexStatus"),
+  apiKey: document.getElementById("apiKey"),
+  model: document.getElementById("model"),
   lmEndpoint: document.getElementById("lmEndpoint"),
   lmModel: document.getElementById("lmModel"),
   lmModelBadge: document.getElementById("lmModelBadge"),
@@ -23,10 +14,10 @@ const els = {
   chitchatGate: document.getElementById("chitchatGate"),
   sourcePref: document.getElementById("sourcePref"),
   consensusEnabled: document.getElementById("consensusEnabled"),
-  consensusVoicesSection: document.getElementById("consensus-voices-section"),
-  voiceLlamaEnabled: document.getElementById("voiceLlamaEnabled"),
-  voiceGrokEnabled: document.getElementById("voiceGrokEnabled"),
-  voiceClaudeEnabled: document.getElementById("voiceClaudeEnabled"),
+  openaiKey: document.getElementById("openaiKey"),
+  openaiModel: document.getElementById("openaiModel"),
+  geminiKey: document.getElementById("geminiKey"),
+  geminiModel: document.getElementById("geminiModel"),
   glossary: document.getElementById("glossary"),
   save: document.getElementById("save"),
   clear: document.getElementById("clear"),
@@ -36,27 +27,29 @@ const els = {
 const VALIDATED_LOCAL_MODELS = new Set(["gemma-3-12b-it"]);
 
 const DEFAULTS = {
-  backend: "vertex",
-  gcpProjectId: "",
-  vertexBearerToken: "",
+  backend: "anthropic",
+  apiKey: "",
+  model: "claude-haiku-4-5",
   lmEndpoint: "http://127.0.0.1:1234",
   lmModel: "gemma-3-12b-it",
   mode: "factflag",
   chitchatGate: true,
   sourcePref: "primary",
   consensusEnabled: false,
-  voiceLlamaEnabled: false,
-  voiceGrokEnabled: false,
-  voiceClaudeEnabled: false,
+  openaiKey: "",
+  openaiModel: "gpt-4o-mini",
+  geminiKey: "",
+  geminiModel: "gemini-2.5-flash",
   glossary: "",
 };
 
 // Load
 chrome.storage.local.get(DEFAULTS, (s) => {
   els.backend.value = s.backend;
-  els.gcpProjectId.value = s.gcpProjectId;
-  els.vertexBearerToken.value = s.vertexBearerToken;
+  els.apiKey.value = s.apiKey;
+  els.model.value = s.model;
   els.lmEndpoint.value = s.lmEndpoint;
+  // Populate the local model dropdown with the saved value
   if (s.lmModel && ![...els.lmModel.options].some(o => o.value === s.lmModel)) {
     els.lmModel.add(new Option(s.lmModel, s.lmModel));
   }
@@ -65,13 +58,20 @@ chrome.storage.local.get(DEFAULTS, (s) => {
   els.chitchatGate.checked = s.chitchatGate;
   els.sourcePref.value = s.sourcePref;
   els.consensusEnabled.checked = s.consensusEnabled;
-  els.voiceLlamaEnabled.checked = s.voiceLlamaEnabled;
-  els.voiceGrokEnabled.checked = s.voiceGrokEnabled;
-  els.voiceClaudeEnabled.checked = s.voiceClaudeEnabled;
+  els.openaiKey.value = s.openaiKey;
+  // Allow user to keep a value not in the static dropdown (newer model release)
+  if (s.openaiModel && ![...els.openaiModel.options].some(o => o.value === s.openaiModel)) {
+    els.openaiModel.add(new Option(s.openaiModel, s.openaiModel));
+  }
+  els.openaiModel.value = s.openaiModel;
+  els.geminiKey.value = s.geminiKey;
+  if (s.geminiModel && ![...els.geminiModel.options].some(o => o.value === s.geminiModel)) {
+    els.geminiModel.add(new Option(s.geminiModel, s.geminiModel));
+  }
+  els.geminiModel.value = s.geminiModel;
   els.glossary.value = s.glossary;
   refreshBackendSection();
   refreshLmModelBadge();
-  refreshConsensusSection();
 });
 
 function flash(msg, isErr = false) {
@@ -81,12 +81,8 @@ function flash(msg, isErr = false) {
 }
 
 function refreshBackendSection() {
-  els.backendVertex.classList.toggle("active", els.backend.value === "vertex");
+  els.backendAnthropic.classList.toggle("active", els.backend.value === "anthropic");
   els.backendLmstudio.classList.toggle("active", els.backend.value === "lmstudio");
-}
-
-function refreshConsensusSection() {
-  els.consensusVoicesSection.classList.toggle("disabled", !els.consensusEnabled.checked);
 }
 
 function refreshLmModelBadge() {
@@ -100,57 +96,6 @@ function refreshLmModelBadge() {
 
 els.backend.addEventListener("change", refreshBackendSection);
 els.lmModel.addEventListener("change", refreshLmModelBadge);
-els.consensusEnabled.addEventListener("change", refreshConsensusSection);
-
-// Vertex test connection — hits Gemini Flash on the global endpoint with a
-// 3-token prompt. Surfaces 401/403/400 with actionable copy. Closes
-// smoke-test bug #4 (no live key validation on Save).
-els.vertexTest.addEventListener("click", async () => {
-  const projectId = els.gcpProjectId.value.trim();
-  const token = els.vertexBearerToken.value.trim();
-  if (!projectId) {
-    els.vertexStatus.textContent = "✕ enter a project ID first";
-    els.vertexStatus.classList.add("err");
-    return;
-  }
-  if (!token) {
-    els.vertexStatus.textContent = "✕ paste an access token first";
-    els.vertexStatus.classList.add("err");
-    return;
-  }
-  els.vertexStatus.textContent = "testing…";
-  els.vertexStatus.classList.remove("err");
-  const url = `https://aiplatform.googleapis.com/v1beta1/projects/${encodeURIComponent(projectId)}/locations/global/endpoints/openapi/chat/completions`;
-  const t0 = Date.now();
-  try {
-    const r = await fetch(url, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [{ role: "user", content: "Reply with ONLY the word: ok" }],
-        max_tokens: 5,
-        temperature: 0.0,
-        extra_body: { google: { thinking_config: { thinking_budget: 0 } } },
-      }),
-    });
-    if (!r.ok) {
-      const body = (await r.text()).slice(0, 200);
-      let hint = "";
-      if (r.status === 401) hint = "access token expired or invalid — refresh with `gcloud auth print-access-token`";
-      else if (r.status === 403) hint = "project lacks Vertex AI access, or Generative Language API not enabled";
-      else if (r.status === 400) hint = body;
-      throw new Error(`HTTP ${r.status} — ${hint || body}`);
-    }
-    const d = await r.json();
-    const txt = (d.choices?.[0]?.message?.content || "").trim();
-    const dt = ((Date.now() - t0) / 1000).toFixed(1);
-    els.vertexStatus.textContent = `✓ reachable, ${dt}s — replied: "${txt.slice(0, 30)}"`;
-  } catch (e) {
-    els.vertexStatus.textContent = `✕ ${String(e.message || e).slice(0, 160)}`;
-    els.vertexStatus.classList.add("err");
-  }
-});
 
 els.lmDiscover.addEventListener("click", async () => {
   const endpoint = (els.lmEndpoint.value || DEFAULTS.lmEndpoint).replace(/\/$/, "");
@@ -165,6 +110,7 @@ els.lmDiscover.addEventListener("click", async () => {
     const current = els.lmModel.value;
     els.lmModel.innerHTML = "";
     for (const id of ids) els.lmModel.add(new Option(id, id));
+    // Try to keep the previous selection, else default to gemma if present, else first.
     if (ids.includes(current)) els.lmModel.value = current;
     else if (ids.includes("gemma-3-12b-it")) els.lmModel.value = "gemma-3-12b-it";
     refreshLmModelBadge();
@@ -204,32 +150,26 @@ els.lmTest.addEventListener("click", async () => {
 });
 
 els.save.addEventListener("click", () => {
-  const projectId = els.gcpProjectId.value.trim();
-  const token = els.vertexBearerToken.value.trim();
-  if (els.backend.value === "vertex") {
-    if (!projectId) {
-      flash("Enter a GCP Project ID for the Vertex backend", true);
-      return;
-    }
-    if (!token) {
-      flash("Paste an access token (gcloud auth print-access-token)", true);
-      return;
-    }
+  const key = els.apiKey.value.trim();
+  if (els.backend.value === "anthropic" && key && !key.startsWith("sk-ant-")) {
+    flash("Anthropic keys start with sk-ant-", true);
+    return;
   }
   chrome.storage.local.set(
     {
       backend: els.backend.value,
-      gcpProjectId: projectId,
-      vertexBearerToken: token,
+      apiKey: key,
+      model: els.model.value,
       lmEndpoint: els.lmEndpoint.value.trim() || DEFAULTS.lmEndpoint,
       lmModel: els.lmModel.value,
       mode: els.mode.value,
       chitchatGate: els.chitchatGate.checked,
       sourcePref: els.sourcePref.value,
       consensusEnabled: els.consensusEnabled.checked,
-      voiceLlamaEnabled: els.voiceLlamaEnabled.checked,
-      voiceGrokEnabled: els.voiceGrokEnabled.checked,
-      voiceClaudeEnabled: els.voiceClaudeEnabled.checked,
+      openaiKey: els.openaiKey.value.trim(),
+      openaiModel: els.openaiModel.value,
+      geminiKey: els.geminiKey.value.trim(),
+      geminiModel: els.geminiModel.value,
       glossary: els.glossary.value,
     },
     () => flash("Saved ✓"),
@@ -237,9 +177,9 @@ els.save.addEventListener("click", () => {
 });
 
 els.clear.addEventListener("click", () => {
-  if (!confirm("Clear your Vertex AI access token from this extension?")) return;
-  chrome.storage.local.set({ vertexBearerToken: "" }, () => {
-    els.vertexBearerToken.value = "";
-    flash("Token cleared");
+  if (!confirm("Clear your API key from this extension?")) return;
+  chrome.storage.local.set({ apiKey: "" }, () => {
+    els.apiKey.value = "";
+    flash("API key cleared");
   });
 });

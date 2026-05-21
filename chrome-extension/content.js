@@ -462,16 +462,28 @@
     const badge = document.createElement("span");
     badge.className = `fcs-consensus fcs-cn-${level}`;
     badge.textContent = payload.badge;
+    // v9.5 vendor-label map: Gemini is now the primary classifier; Llama/Grok/
+    // Claude are the consensus voices on conf-4/5 flags. Legacy v9 labels
+    // (openai/gemini-as-secondary) preserved for graceful display of any
+    // residual storage from a prior install.
     const summary = (payload.details || []).map((d) => {
-      const tag = d.vendor === "openai" ? "OpenAI" : d.vendor === "gemini" ? "Gemini" : (d.model || "?");
+      const tag =
+        d.vendor === "google"    ? "Gemini" :
+        d.vendor === "meta"      ? "Llama"  :
+        d.vendor === "xai"       ? "Grok"   :
+        d.vendor === "anthropic" ? "Claude" :
+        d.vendor === "openai"    ? "OpenAI" :
+        d.vendor === "gemini"    ? "Gemini" :
+        (d.model || "?");
       if (d.status === "error") return `${tag}: error (${d.error || "unknown"})`;
       if (d.status === "agree") {
         const conf = d.confidence != null ? `, conf ${d.confidence}` : "";
         return `${tag}: agrees${conf}`;
       }
+      if (d.status === "disagree") return `${tag}: disagrees`;
       return `${tag}: did not flag (SKIP)`;
     }).join("\n");
-    const headline = `Cross-model agreement: ${payload.agreed}/${payload.total} (incl. Claude)`;
+    const headline = `Cross-vendor agreement: ${payload.agreed}/${payload.total} (incl. Gemini)`;
     badge.title = `${headline}\n\n${summary}`;
     // Slot the badge inside the tag-label run so it sits next to the emoji.
     const tagLabel = card.querySelector(".fcs-tag-label");
@@ -664,18 +676,27 @@
   // Reflect current settings in the meta bar
   function refreshModeTag() {
     chrome.storage.local.get(
-      { mode: "factflag", apiKey: "", backend: "anthropic", lmModel: "gemma-3-12b-it" },
+      {
+        mode: "factflag",
+        backend: "vertex",
+        gcpProjectId: "",
+        vertexBearerToken: "",
+        lmModel: "gemma-3-12b-it",
+      },
       (s) => {
         let suffix = "";
-        if (s.backend === "anthropic" && !s.apiKey) suffix = "  ⚠ no API key";
-        else if (s.backend === "lmstudio") suffix = `  · LM Studio (${s.lmModel})`;
+        if (s.backend === "vertex" && (!s.gcpProjectId || !s.vertexBearerToken)) {
+          suffix = "  ⚠ Vertex not configured";
+        } else if (s.backend === "lmstudio") {
+          suffix = `  · LM Studio (${s.lmModel})`;
+        }
         modeTag.textContent = `mode: ${s.mode}${suffix}`;
       },
     );
   }
   refreshModeTag();
   chrome.storage.onChanged?.addListener((changes) => {
-    if (changes.mode || changes.apiKey || changes.backend || changes.lmModel) {
+    if (changes.mode || changes.backend || changes.gcpProjectId || changes.vertexBearerToken || changes.lmModel) {
       refreshModeTag();
     }
   });

@@ -5,20 +5,18 @@
 .vscode/
 .idea/
 *.swp
-
 # Node, if anything in the toolchain ends up using it
 node_modules/
-
 # Local environment files — never commit these
 .env
 .env.*
 local-keys.txt
 *.local.*
-
 # Build outputs (we publish the zip via GitHub Releases, not git)
 dist/*.zip
 !dist/.gitkeep
-
 # Backup files
 *.bak
 *~
+*-next-session-brief.md
+next-session-brief.md

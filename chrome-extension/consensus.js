@@ -73,12 +73,31 @@ export function sanitizeUploaderText(s, maxLen = 200) {
 // ID, project number, model slug, and account-bound identifiers; the user
 // then shares the .md export with journalists/judges per the contest pitch.
 //
+// v0.5.3: special-cases common HTTP status patterns BEFORE general redaction.
+// Raw Vertex/OpenAI error envelopes are leaky and confusing; we emit one
+// clean line per category that tells the user what to do about it.
+//
 // We don't try to redact every conceivable identifier — just the obvious
 // shapes: configured project ID (when supplied), email addresses, and long
 // numeric IDs (project numbers, billing IDs).
 export function sanitizeError(message, knownProjectId = "") {
   if (!message) return "Error";
-  let s = String(message);
+  const s0 = String(message);
+
+  // v0.5.3 — friendly copy for the three common Vertex failure modes.
+  // The 429 case is the one most users hit first when traffic ramps:
+  // Gemini's per-project per-minute quota is the binding constraint.
+  if (/\b429\b/.test(s0) || /[Rr]esource exhausted/.test(s0) || /[Rr]ate ?limit/.test(s0)) {
+    return "Rate-limited by Vertex (HTTP 429). Pausing 30 seconds. Raise the Gemini quota in GCP Console → IAM → Quotas, or turn off the chitchat gate to halve the call rate.";
+  }
+  if (/\b401\b/.test(s0) || /[Aa]ccess token (?:expired|invalid)/.test(s0)) {
+    return "Vertex access token expired. Refresh in Options: gcloud auth print-access-token, paste, save.";
+  }
+  if (/\b403\b/.test(s0) || /permission denied/i.test(s0)) {
+    return "Vertex 403 — project lacks access to the model, or the Generative Language API is not enabled.";
+  }
+
+  let s = s0;
   if (knownProjectId) {
     const escaped = knownProjectId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     s = s.replace(new RegExp(escaped, "g"), "<project>");
@@ -91,6 +110,14 @@ export function sanitizeError(message, knownProjectId = "") {
   s = s.replace(/\s+/g, " ").trim();
   // Cap length tighter than the v9.5 200-char message cap.
   return s.slice(0, 160);
+}
+
+// is429 — single source of truth for the rate-limit pattern. Used by
+// background.js to gate the per-tab cooldown.
+export function is429(message) {
+  if (!message) return false;
+  const s = String(message);
+  return /\b429\b/.test(s) || /[Rr]esource exhausted/.test(s);
 }
 
 // v9-era settings keys that v9.5 no longer uses. Removed from

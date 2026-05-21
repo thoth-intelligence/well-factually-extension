@@ -34,7 +34,7 @@ import {
   callVertex, extractText, toMessages, withTimeout,
   callGeminiWithSearch, extractGroundedCitation,
 } from "./vertex.js";
-import { aggregateConsensus, sanitizeUploaderText, sanitizeError,
+import { aggregateConsensus, sanitizeUploaderText, sanitizeError, is429,
          V9_DEAD_STORAGE_KEYS } from "./consensus.js";
 
 const CONTEXT_WINDOW_S = 60;
@@ -44,6 +44,7 @@ const CONSENSUS_TIMEOUT_MS = 4000;
 const PRIMARY_TIMEOUT_MS = 12000;   // R4: classifier/chitchat/citation ceiling
 const DOSSIER_TIMEOUT_MS = 20000;   // dossier is latency-tolerant but bounded
 const CLAUDE_429_BACKOFF_MS = 500;
+const RATE_LIMIT_COOLDOWN_S = 30;   // v0.5.3: pause primary ticks after 429
 
 const tabState = new Map();
 
@@ -56,6 +57,10 @@ function getState(tabId) {
       // R3: per-tab epoch — bumped on RESET (YouTube SPA nav). Stamped on
       // every outbound card so content.js can drop stale results.
       epoch: 0,
+      // v0.5.3: cue-second timestamp until which processTick skips silently
+      // after a HTTP 429. Prevents spamming the sidebar with rate-limit
+      // cards every 18s while the backoff window is in effect.
+      rateLimitedUntil: -1,
       recentByMode: { question: [], missing: [], factflag: [], summary: [] },
     });
   }
@@ -444,6 +449,12 @@ async function processTick(tabId) {
   const now = state.currentTime ?? state.lines[state.lines.length - 1].t;
   if (now - state.lastCommentT < COMMENT_EVERY_S) return;
 
+  // v0.5.3: 429 cooldown. After a rate-limit hit, skip all primary calls
+  // for RATE_LIMIT_COOLDOWN_S of video-cue time. The first 429 emits ONE
+  // error card; subsequent ticks within the window are silent. The user
+  // sees a calm pause instead of a card flood.
+  if (state.rateLimitedUntil >= 0 && now < state.rateLimitedUntil) return;
+
   const minT = now - CONTEXT_WINDOW_S;
   const window = state.lines.filter((l) => l.t >= minT && l.t <= now);
   const newLines = window.filter((l) => l.t > now - NEW_LINES_WINDOW_S);
@@ -551,13 +562,22 @@ async function processTick(tabId) {
       }).catch(() => { /* swallow — no badge is the right failure mode */ });
     }
   } catch (e) {
+    const rawMsg = String(e.message || e);
+    // v0.5.3: when the error is a 429, set the per-tab cooldown so future
+    // ticks within RATE_LIMIT_COOLDOWN_S of video-cue time skip silently.
+    // The card we emit here is the ONLY user-facing notification of the
+    // rate-limit hit until the cooldown window expires.
+    if (is429(rawMsg)) {
+      state.rateLimitedUntil = now + RATE_LIMIT_COOLDOWN_S;
+    }
     // R6: sanitize before user-facing display. Project ID is the most
     // identifying field a user might inadvertently share via the markdown
     // export; email-shaped and long-numeric tokens also get scrubbed.
+    // sanitizeError also rewrites 429/401/403 into friendly copy.
     sendCard(tabId, {
       kind: "error",
       cue: now,
-      text: sanitizeError(String(e.message || e), settings.gcpProjectId),
+      text: sanitizeError(rawMsg, settings.gcpProjectId),
     });
   } finally {
     state.inFlight = false;

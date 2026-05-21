@@ -1,0 +1,354 @@
+/* Sidebar injected into youtube.com/watch pages. Fixed to the right edge,
+   doesn't push or reflow YouTube's own layout (uses position: fixed + z-index). */
+
+#fcs-root {
+  position: fixed;
+  top: 56px;                      /* below YouTube's masthead */
+  right: 0;
+  width: 360px;
+  height: calc(100vh - 56px);
+  z-index: 2147483646;            /* near max — above YouTube overlays */
+  background: rgba(15, 17, 22, 0.96);
+  color: #e6e8ee;
+  font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+  border-left: 1px solid #262a33;
+  box-shadow: -2px 0 16px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+#fcs-root.collapsed {
+  width: 36px;
+}
+#fcs-root.collapsed .fcs-body,
+#fcs-root.collapsed .fcs-meta {
+  display: none;
+}
+
+/* Collapsed-state header UX (2026-05-15 fix): the pre-fix layout had .fcs-head
+   declared flex-shrink: 0 with a content width far exceeding 36px, so the
+   header (and the toggle button at its right end) overflowed off-screen,
+   leaving the user with no clickable way to re-expand the sidebar. When
+   collapsed, hide title + export + clear, center the toggle inside the
+   36px strip, and enlarge its hit-target so it's easy to grab. */
+#fcs-root.collapsed .fcs-title,
+#fcs-root.collapsed #fcs-export,
+#fcs-root.collapsed #fcs-clear {
+  display: none;
+}
+#fcs-root.collapsed .fcs-head {
+  justify-content: center;
+  padding: 8px 0;
+}
+#fcs-root.collapsed #fcs-toggle {
+  padding: 4px 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.fcs-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid #262a33;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #8a93a6;
+  flex-shrink: 0;
+}
+.fcs-head .fcs-title { color: #e6e8ee; text-transform: none; letter-spacing: 0; font-weight: 600; font-size: 12px; }
+.fcs-head button {
+  background: transparent; border: 1px solid #262a33; color: #8a93a6;
+  border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 11px;
+}
+.fcs-head button:hover { color: #e6e8ee; border-color: #8a93a6; }
+
+.fcs-meta {
+  padding: 6px 10px;
+  font-size: 10px;
+  color: #525968;
+  border-bottom: 1px solid #262a33;
+  flex-shrink: 0;
+  display: flex; justify-content: space-between; gap: 8px;
+}
+.fcs-meta .fcs-status { font-variant-numeric: tabular-nums; }
+.fcs-meta .fcs-live::before {
+  content: "● ";
+  color: #6cd28d;
+  animation: fcs-pulse 1.5s infinite;
+}
+@keyframes fcs-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+.fcs-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.fcs-empty {
+  color: #525968;
+  text-align: center;
+  padding: 20px 10px;
+  font-size: 12px;
+  font-style: italic;
+}
+
+.fcs-card {
+  background: #1c1f26;
+  border: 1px solid #262a33;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  position: relative;
+}
+.fcs-card .fcs-tag {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #f0b96a;
+  font-weight: 600;
+  margin-bottom: 4px;
+  display: flex; justify-content: space-between; align-items: baseline;
+}
+.fcs-card .fcs-tag .fcs-cue {
+  color: #8a93a6; font-weight: 400; font-variant-numeric: tabular-nums;
+}
+
+/* Confidence indicator — traffic-light emoji + tag label, in a flex row.
+   The dot indicator was retired 2026-05-14 — too subtle for a glanceable
+   sidebar. Emoji + per-tier card styling does the job with more punch. */
+.fcs-tag-label { display: inline-flex; align-items: center; gap: 5px; }
+.fcs-conf-emoji {
+  font-size: 13px;
+  line-height: 1;
+  filter: saturate(1.1);
+  flex-shrink: 0;
+}
+
+/* Conf 1-3 use the standard neutral card. Conf 4 and 5 escalate visually:
+   warm-red tint, accent border, and a one-shot entry animation that fades
+   so it doesn't keep distracting after the card has settled. */
+.fcs-card.fcs-conf-4 {
+  background: #1e1d22;
+  border-color: rgba(230, 130, 50, 0.4);
+  border-left: 2px solid rgba(230, 130, 50, 0.7);
+  animation: fcs-arrival-moderate 1.5s ease-out;
+}
+.fcs-card.fcs-conf-5 {
+  background: #221b1c;
+  border-color: rgba(220, 70, 70, 0.55);
+  border-left: 3px solid #dc5050;
+  animation: fcs-arrival-strong 1.5s ease-out;
+}
+
+@keyframes fcs-arrival-moderate {
+  0%   { transform: scale(0.98); box-shadow: 0 0 0 0 rgba(230, 130, 50, 0); }
+  18%  { transform: scale(1.01); box-shadow: 0 0 14px 3px rgba(230, 130, 50, 0.45); }
+  100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(230, 130, 50, 0); }
+}
+@keyframes fcs-arrival-strong {
+  0%   { transform: scale(0.96); box-shadow: 0 0 0 0 rgba(220, 70, 70, 0); }
+  14%  { transform: scale(1.015); box-shadow: 0 0 20px 6px rgba(220, 70, 70, 0.6); }
+  100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(220, 70, 70, 0); }
+}
+
+/* Citation — source link + excerpt attached to a card after async retrieval.
+   Subtle styling so it doesn't compete with the flag text. */
+.fcs-citation {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed #262a33;
+  font-size: 11px;
+  color: #8a93a6;
+}
+.fcs-citation-link {
+  color: #f0b96a;
+  text-decoration: none;
+  font-weight: 500;
+  display: inline-block;
+  margin-bottom: 2px;
+  word-break: break-word;
+}
+.fcs-citation-link::after {
+  content: " ↗";
+  color: #8a6f32;
+  font-size: 10px;
+}
+.fcs-citation-link:hover { text-decoration: underline; }
+.fcs-citation-excerpt {
+  font-size: 11px;
+  line-height: 1.4;
+  color: #8a93a6;
+  font-style: italic;
+}
+.fcs-card .fcs-text { color: #e6e8ee; line-height: 1.5; font-size: 13px; }
+.fcs-card .fcs-actions {
+  position: absolute; top: 6px; right: 8px;
+  display: flex; gap: 4px; opacity: 0;
+  transition: opacity 0.15s;
+}
+.fcs-card:hover .fcs-actions { opacity: 1; }
+.fcs-card .fcs-actions button {
+  background: transparent; border: 1px solid #262a33; color: #525968;
+  border-radius: 3px; padding: 1px 5px; cursor: pointer; font-size: 10px;
+}
+.fcs-card.pinned { border-color: rgba(255, 206, 94, 0.5); }
+.fcs-card.dismissed { display: none; }
+
+.fcs-ghost {
+  color: #525968;
+  font-size: 10px;
+  font-style: italic;
+  padding: 3px 4px;
+  display: flex; gap: 8px;
+}
+.fcs-ghost .fcs-cue { font-variant-numeric: tabular-nums; min-width: 40px; }
+
+/* Click-to-jump: cue timecodes become hot links to the moment in the video. */
+.fcs-cue.fcs-jumpable {
+  cursor: pointer;
+  transition: color 0.15s, text-decoration-color 0.15s;
+  text-decoration: underline dotted transparent;
+  text-underline-offset: 2px;
+}
+.fcs-cue.fcs-jumpable:hover {
+  color: #f0b96a;
+  text-decoration-color: #f0b96a;
+}
+
+.fcs-error {
+  background: rgba(120, 60, 60, 0.3);
+  border-color: #7a3c3c;
+  color: #f0b96a;
+}
+
+/* In-video chyron overlay (Feature 7, v9 only) — bottom-of-player banner
+   that fades in when a conf-4 or conf-5 flag lands. Appended INSIDE the
+   YouTube player container so it inherits fullscreen automatically. Sits
+   at bottom: 56px to float above the YouTube control bar without covering
+   the main video frame. Auto-dismisses after 8s with slide-down fade.
+   The banner is clickable to seek back to the moment; × dismisses early. */
+.fcs-overlay {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 56px;
+  padding: 8px 12px;
+  background: rgba(15, 17, 22, 0.88);
+  color: #e6e8ee;
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 6px;
+  border-left: 3px solid rgba(220, 80, 80, 0.7);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: fcs-overlay-enter 0.4s ease-out;
+  z-index: 60;
+  max-height: 64px;
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+}
+.fcs-overlay.fcs-overlay-conf-4 { border-left-color: rgba(230, 130, 50, 0.85); }
+.fcs-overlay.fcs-overlay-conf-5 {
+  border-left-color: #dc5050;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45), 0 0 14px rgba(220, 80, 80, 0.25);
+}
+.fcs-overlay-emoji { font-size: 16px; flex-shrink: 0; line-height: 1; }
+.fcs-overlay-tag {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #f0b96a;
+  flex-shrink: 0;
+}
+.fcs-overlay-text {
+  flex: 1;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.fcs-overlay-dismiss {
+  background: transparent;
+  border: none;
+  color: #8a93a6;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  padding: 0 6px;
+  flex-shrink: 0;
+}
+.fcs-overlay-dismiss:hover { color: #e6e8ee; }
+.fcs-overlay-leaving { animation: fcs-overlay-leave 0.4s ease-in forwards; }
+@keyframes fcs-overlay-enter {
+  from { transform: translateY(120%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+@keyframes fcs-overlay-leave {
+  from { transform: translateY(0);    opacity: 1; }
+  to   { transform: translateY(120%); opacity: 0; }
+}
+
+/* Cross-model consensus badge (Feature 6) — small pill next to the tag label
+   on conf 4-5 cards once the secondary-model results land. Three tiers:
+   strong (all agree, green), partial (mixed, amber), weak (only Claude
+   flagged, red). The tooltip carries the per-model breakdown — clean way to
+   answer "which model said what?" without crowding the card. */
+.fcs-consensus {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  cursor: help;
+  vertical-align: middle;
+}
+.fcs-consensus.fcs-cn-strong  { background: rgba(108, 210, 141, 0.18); color: #6cd28d; }
+.fcs-consensus.fcs-cn-partial { background: rgba(240, 185, 106, 0.18); color: #f0b96a; }
+.fcs-consensus.fcs-cn-weak    { background: rgba(220,  90,  90, 0.20); color: #e69191; }
+
+/* Pre-roll dossier — the briefing card that lands before captions arrive.
+   Cool/blue accent distinguishes it from warm-red high-confidence fact-flag
+   cards, signalling "framing" rather than "alarm". Slightly larger body
+   line-height since this is one paragraph of prose, not a one-liner. */
+.fcs-card.fcs-dossier {
+  background: #19202a;
+  border-color: rgba(120, 170, 220, 0.4);
+  border-left: 2px solid rgba(120, 170, 220, 0.7);
+  animation: fcs-arrival-soft 1.5s ease-out;
+}
+.fcs-card.fcs-dossier .fcs-tag {
+  color: #8bb4e0;
+}
+.fcs-card.fcs-dossier .fcs-tag-label { font-weight: 700; }
+.fcs-card.fcs-dossier .fcs-dossier-channel {
+  font-size: 10px;
+  color: #8a93a6;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fcs-card.fcs-dossier .fcs-text {
+  line-height: 1.55;
+  font-size: 12.5px;
+}
+
+@keyframes fcs-arrival-soft {
+  0%   { transform: scale(0.99); box-shadow: 0 0 0 0 rgba(120, 170, 220, 0); }
+  20%  { transform: scale(1.005); box-shadow: 0 0 12px 2px rgba(120, 170, 220, 0.3); }
+  100% { transform: scale(1);     box-shadow: 0 0 0 0 rgba(120, 170, 220, 0); }
+}

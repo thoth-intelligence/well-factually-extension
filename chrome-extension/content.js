@@ -73,11 +73,16 @@
   // (extension reloaded mid-session, leaving this script's runtime invalid)
   // fails silently instead of throwing "Extension context invalidated."
   // Once we detect the runtime is gone, stop trying.
+  //
+  // v0.5.1 (R3): stamps every outbound message with the current epoch so the
+  // background can echo it on the resulting CARD. Cards from a previous
+  // video's epoch are dropped on receipt — see the CARD listener below.
   let runtimeAlive = true;
+  let currentEpoch = 0;
   function safeSend(msg) {
     if (!runtimeAlive) return;
     try {
-      const p = chrome.runtime.sendMessage(msg);
+      const p = chrome.runtime.sendMessage({ ...msg, epoch: currentEpoch });
       if (p && typeof p.catch === "function") p.catch(() => {});
     } catch (e) {
       runtimeAlive = false;
@@ -426,6 +431,13 @@
   function attachCitation(cue, citation) {
     if (!citation || !citation.url) return;
     if (!/^https?:\/\//i.test(citation.url)) return;
+    // v0.5.1 (Sec3): defensive URL parse — Gemini grounding can return
+    // 'https://' or other malformed strings that pass the regex but throw
+    // inside the URL constructor. Throwing here would silently skip the
+    // rest of the message-handling for this card.
+    let hostname;
+    try { hostname = new URL(citation.url).hostname; }
+    catch (_e) { return; }
     const card = body.querySelector(`.fcs-card[data-cue="${String(cue)}"]`);
     if (!card) return;
     if (card.querySelector(".fcs-citation")) return; // already attached
@@ -436,7 +448,7 @@
     link.target = "_blank";
     link.rel = "noopener noreferrer";
     link.className = "fcs-citation-link";
-    link.textContent = citation.title || new URL(citation.url).hostname;
+    link.textContent = citation.title || hostname;
     wrap.appendChild(link);
     if (citation.excerpt) {
       const ex = document.createElement("div");
@@ -462,26 +474,24 @@
     const badge = document.createElement("span");
     badge.className = `fcs-consensus fcs-cn-${level}`;
     badge.textContent = payload.badge;
-    // v9.5 vendor-label map: Gemini is now the primary classifier; Llama/Grok/
-    // Claude are the consensus voices on conf-4/5 flags. Legacy v9 labels
-    // (openai/gemini-as-secondary) preserved for graceful display of any
-    // residual storage from a prior install.
+    // v9.5 vendor-label map. Background.js fireVoice only ever emits
+    // vendors in {google, meta, xai, anthropic} and statuses in
+    // {agree, disagree, unparseable, error}. v0.5.1 removed v9-era
+    // openai/gemini-as-secondary fallback entries (Maint5/6) — they were
+    // unreachable code, since the storage migration for those keys
+    // happened on extension startup.
     const summary = (payload.details || []).map((d) => {
       const tag =
         d.vendor === "google"    ? "Gemini" :
         d.vendor === "meta"      ? "Llama"  :
         d.vendor === "xai"       ? "Grok"   :
         d.vendor === "anthropic" ? "Claude" :
-        d.vendor === "openai"    ? "OpenAI" :
-        d.vendor === "gemini"    ? "Gemini" :
-        (d.model || "?");
-      if (d.status === "error") return `${tag}: error (${d.error || "unknown"})`;
-      if (d.status === "agree") {
-        const conf = d.confidence != null ? `, conf ${d.confidence}` : "";
-        return `${tag}: agrees${conf}`;
-      }
-      if (d.status === "disagree") return `${tag}: disagrees`;
-      return `${tag}: did not flag (SKIP)`;
+        (d.model || d.vendor || "?");
+      if (d.status === "error")       return `${tag}: error (${d.error || "unknown"})`;
+      if (d.status === "unparseable") return `${tag}: unparseable verdict`;
+      if (d.status === "agree")       return `${tag}: agrees`;
+      if (d.status === "disagree")    return `${tag}: disagrees`;
+      return `${tag}: ${d.status || "?"}`;
     }).join("\n");
     const headline = `Cross-vendor agreement: ${payload.agreed}/${payload.total} (incl. Gemini)`;
     badge.title = `${headline}\n\n${summary}`;
@@ -649,6 +659,11 @@
   // ───────────────────────────────────────────────────────────────────────
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type !== "CARD") return;
+    // v0.5.1 (R3): drop cards from a previous video. A YouTube SPA nav
+    // bumps currentEpoch; any late-arriving citation/consensus card stamped
+    // with the OLD epoch by background.js gets discarded silently — it
+    // can't bind to a same-cue card in the new video's sidebar.
+    if (msg.epoch != null && msg.epoch !== currentEpoch) return;
     if (msg.kind === "comment") {
       addCard({ tag: msg.tag, cue: msg.cue, text: msg.text, confidence: msg.confidence });
       // Feature 7 (v9): also fire the in-video chyron for high-stakes flags
@@ -702,11 +717,16 @@
   });
 
   // On navigation within YouTube SPA (clicking another video), reset state.
+  // v0.5.1 (R3): bump currentEpoch BEFORE sending RESET so subsequent
+  // sends carry the new epoch. Any cards still in-flight from the prior
+  // video (citation, consensus) will arrive stamped with the OLD epoch
+  // and get dropped by the CARD listener above.
   let lastUrl = location.href;
   setInterval(() => {
     if (location.href !== lastUrl) {
       lastUrl = location.href;
       lastSentText = "";
+      currentEpoch++;
       [...body.querySelectorAll(".fcs-card, .fcs-ghost")].forEach((n) => n.remove());
       body.appendChild(empty);
       setStatus("new video — waiting for captions…");

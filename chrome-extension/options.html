@@ -1,196 +1,270 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<title>Live Fact-Check Sidebar — Options</title>
-<style>
-  body {
-    margin: 0; padding: 40px;
-    background: #0e0f12;
-    color: #e6e8ee;
-    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
-    max-width: 640px; margin: 0 auto;
-  }
-  h1 { font-size: 18px; font-weight: 600; margin: 0 0 24px; }
-  h2 { font-size: 13px; font-weight: 600; margin: 24px 0 10px; color: #8a93a6; text-transform: uppercase; letter-spacing: 0.5px; }
-  .row { margin-bottom: 16px; }
-  label { display: block; margin-bottom: 6px; font-size: 12px; color: #8a93a6; }
-  input[type=text], input[type=password], select, textarea {
-    width: 100%; padding: 8px 10px; background: #1c1f26; color: #e6e8ee;
-    border: 1px solid #262a33; border-radius: 6px; font: inherit; box-sizing: border-box;
-  }
-  input[type=password], textarea.token { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  textarea { min-height: 80px; resize: vertical; }
-  textarea.token {
-    min-height: 60px; font-size: 11px;
-    -webkit-text-security: disc;
-  }
-  textarea.token:focus { -webkit-text-security: none; }
-  button {
-    background: #7aa2ff; color: #0a1226; border: none; padding: 9px 18px;
-    border-radius: 6px; font-weight: 600; cursor: pointer; font: inherit;
-  }
-  button.secondary { background: #1c1f26; color: #e6e8ee; border: 1px solid #262a33; font-weight: 400; }
-  .status { color: #6cd28d; font-size: 12px; margin-left: 12px; }
-  .status.err { color: #f0b96a; }
-  .hint { font-size: 11px; color: #525968; margin-top: 4px; }
-  .hint code { background: #1c1f26; padding: 1px 4px; border-radius: 3px; }
-  .checkbox-row { display: flex; align-items: center; gap: 8px; }
-  .checkbox-row input { width: auto; }
-  .checkbox-row label { margin: 0; }
-  a { color: #7aa2ff; }
-  .backend-section { display: none; padding: 12px; border: 1px solid #262a33; border-radius: 6px; background: rgba(28, 31, 38, 0.5); margin-top: 8px; }
-  .backend-section.active { display: block; }
-  .pill { display: inline-block; padding: 1px 6px; border-radius: 10px; font-size: 10px; font-weight: 600; }
-  .pill.validated { background: rgba(108, 210, 141, 0.15); color: #6cd28d; }
-  .pill.unvalidated { background: rgba(240, 185, 106, 0.15); color: #f0b96a; }
-  .opt-tooltip {
-    display: inline-block; width: 14px; height: 14px; line-height: 14px;
-    text-align: center; border-radius: 50%; background: #262a33; color: #8a93a6;
-    font-size: 10px; font-weight: 600; margin-left: 4px; cursor: help;
-    user-select: none;
-  }
-  .opt-voices { padding-left: 12px; border-left: 2px solid #262a33; margin-top: 8px; }
-  .opt-voices.disabled { opacity: 0.4; pointer-events: none; }
-  .opt-voices .checkbox-row { margin-bottom: 6px; }
-  .opt-voices .checkbox-row label { color: #e6e8ee; }
-  .opt-voices em { color: #525968; font-style: italic; font-size: 11px; }
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Live Fact-Check Sidebar — Options</title>
+  <!--
+    Tailwind via Play CDN. Note for MV3 packaging: the Play CDN uses runtime
+    JS scanning + eval, which Chrome's strict extension_pages CSP blocks. For
+    the extension to actually load Tailwind from a CDN, ship a precompiled
+    bundle locally (e.g. `tailwind.min.css`) and `<link>` it. The CDN script
+    below renders correctly in any browser opened via file:// or http(s)://.
+  -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', 'Inter', 'system-ui', 'sans-serif'],
+            mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+          },
+          colors: {
+            ink: {
+              50: '#e6e8ee',
+              400: '#8a93a6',
+              500: '#525968',
+            },
+            shell: {
+              900: '#0e0f12',
+              800: '#1c1f26',
+              700: '#262a33',
+            },
+            brand: '#7aa2ff',
+            good: '#6cd28d',
+            warn: '#f0b96a',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    /* Token masking — visible only on blur. Same pattern as the Vertex
+       bearer-token paste field in v0.5.0. */
+    textarea.token { -webkit-text-security: disc; }
+    textarea.token:focus { -webkit-text-security: none; }
+
+    /* Backend-section visibility is toggled by options.js via the .active
+       class. Preserve that contract so the JS doesn't need to change. */
+    .backend-section { display: none; }
+    .backend-section.active { display: block; }
+
+    /* Per-voice section gray-out when consensus master toggle is off. */
+    .opt-voices.disabled { opacity: 0.4; pointer-events: none; }
+  </style>
 </head>
-<body>
-<h1>🎬 Live Fact-Check Sidebar — Options</h1>
+<body class="min-h-screen bg-shell-900 text-ink-50 font-sans antialiased">
+<main class="mx-auto w-full max-w-2xl px-4 py-6 sm:px-8 sm:py-10">
 
-<h2>Backend</h2>
-<div class="row">
-  <label>Where to send caption windows for fact-checking</label>
-  <select id="backend">
-    <option value="vertex">Vertex AI (cloud — Gemini Flash primary, optional Llama/Grok/Claude consensus)</option>
-    <option value="lmstudio">LM Studio (local — free, private, requires local server)</option>
-  </select>
-</div>
+  <header class="mb-6 sm:mb-8">
+    <h1 class="text-lg sm:text-xl font-semibold tracking-tight">🎬 Live Fact-Check Sidebar — Options</h1>
+  </header>
 
-<div id="backend-vertex" class="backend-section">
-  <div class="row">
-    <label>Google Cloud Project ID</label>
-    <input type="text" id="gcpProjectId" placeholder="my-gcp-project-id" autocomplete="off">
-    <div class="hint">The project where Vertex AI is enabled and quotas are filed.</div>
-  </div>
-  <div class="row">
-    <label>Vertex AI access token <span class="opt-tooltip" title="Refresh by running &#10;&#10;  gcloud auth print-access-token &#10;&#10;in your terminal, then pasting the entire token here. Tokens expire after ~60 minutes; you'll see an `access token expired` error card when that happens — just refresh.">?</span></label>
-    <textarea id="vertexBearerToken" class="token" placeholder="ya29.… (paste output of `gcloud auth print-access-token`)" autocomplete="off"></textarea>
-    <div class="hint">
-      Run <code>gcloud auth print-access-token</code> and paste the result. Token lasts ~60 minutes; refresh when you see "access token expired" in a card. Token stored in <code>chrome.storage.local</code>, never sent anywhere except <code>*.aiplatform.googleapis.com</code>.
-    </div>
-  </div>
-  <div class="row">
-    <button id="vertexTest" class="secondary">Test connection</button>
-    <span id="vertexStatus" class="hint" style="margin-left:8px;"></span>
-  </div>
-</div>
+  <form id="optionsForm" class="space-y-8" novalidate>
 
-<div id="backend-lmstudio" class="backend-section">
-  <div class="row">
-    <label>LM Studio endpoint (default `http://127.0.0.1:1234` — change only if you've remapped the port)</label>
-    <input type="text" id="lmEndpoint" placeholder="http://127.0.0.1:1234">
-  </div>
-  <div class="row">
-    <label>Local model — <button id="lmDiscover" class="secondary" style="margin-left:8px;padding:2px 8px;font-size:11px;">🔍 Discover</button></label>
-    <select id="lmModel">
-      <option value="gemma-3-12b-it">gemma-3-12b-it</option>
-    </select>
-    <div id="lmModelBadge" class="hint" style="margin-top:4px;"></div>
-    <div class="hint" style="margin-top:6px;">
-      Validated: <code>gemma-3-12b-it</code>. Other local models (qwen-family, smaller variants) showed format-leak and opener-lock issues in our bench — may underperform on fact-flag mode. Use at your own risk.
-    </div>
-  </div>
-  <div class="row">
-    <button id="lmTest" class="secondary">Test connection</button>
-    <span id="lmStatus" class="hint" style="margin-left:8px;"></span>
-  </div>
-</div>
+    <!-- Backend -->
+    <section aria-labelledby="backend-heading">
+      <h2 id="backend-heading" class="text-xs font-semibold uppercase tracking-wider text-ink-400 mb-3">Backend</h2>
+      <div class="space-y-2">
+        <label for="backend" class="block text-xs text-ink-400">Where to send caption windows for fact-checking</label>
+        <select id="backend"
+                class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2 text-sm text-ink-50 focus:outline-none focus:ring-2 focus:ring-brand/60">
+          <option value="vertex">Vertex AI (cloud — Gemini Flash primary, optional Llama/Grok/Claude consensus)</option>
+          <option value="lmstudio">LM Studio (local — free, private, requires local server)</option>
+        </select>
+      </div>
 
-<h2>Mode</h2>
-<div class="row">
-  <label>What kind of commentary</label>
-  <select id="mode">
-    <option value="factflag">Fact-flag (default — questionable claims)</option>
-    <option value="question">Sharp question (partner-grade interruptions)</option>
-    <option value="missing">Missing info (ownership / number / date gaps)</option>
-    <option value="summary">Rolling summary (decisions / topics)</option>
-  </select>
-</div>
+      <fieldset id="backend-vertex" class="backend-section active mt-3 rounded-md border border-shell-700 bg-shell-800/40 p-3 sm:p-4 space-y-4">
+        <legend class="sr-only">Vertex AI configuration</legend>
 
-<div class="row checkbox-row">
-  <input type="checkbox" id="chitchatGate" checked>
-  <label for="chitchatGate">Chitchat gate (skip ad reads, digressions, social filler — saves ~30% API spend on podcasts)</label>
-</div>
+        <div class="space-y-2">
+          <label for="gcpProjectId" class="block text-xs text-ink-400">Google Cloud Project ID</label>
+          <input type="text" id="gcpProjectId" placeholder="my-gcp-project-id" autocomplete="off"
+                 class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/60">
+          <p class="text-[11px] text-ink-500">The project where Vertex AI is enabled and quotas are filed.</p>
+        </div>
 
-<h2>Citation sourcing</h2>
-<div class="row">
-  <label>Which kinds of outlets should the citation retriever prefer?</label>
-  <select id="sourcePref">
-    <option value="primary">Primary sources only (govt stats, peer-reviewed journals, AP/Reuters, encyclopedias)</option>
-    <option value="centrist">Centrist outlets (Reuters, AP, BBC, The Economist, Bloomberg)</option>
-    <option value="left">Left-leaning mainstream (NYT, WaPo, Guardian, NPR, Atlantic, ProPublica)</option>
-    <option value="right">Right-leaning mainstream (WSJ news, National Review, Washington Examiner, Fox News, The Dispatch)</option>
-    <option value="all">Any reputable source (no profile filter)</option>
-  </select>
-  <div class="hint">
-    Steers which links the citation model attaches under each fact-check card. Does NOT affect what gets flagged — the fact-check itself uses the same model and prompt regardless of this preference. Citation grounds via Gemini's Google Search tool on the Vertex backend.
-  </div>
-</div>
+        <div class="space-y-2">
+          <label for="vertexBearerToken" class="flex items-center gap-1 text-xs text-ink-400">
+            Vertex AI access token
+            <span role="tooltip" aria-label="Refresh by running gcloud auth print-access-token in your terminal, then paste the token here. Expires after ~60 minutes."
+                  title="Refresh by running &#10;&#10;  gcloud auth print-access-token &#10;&#10;in your terminal, then pasting the token here. Tokens expire after ~60 minutes; you'll see an `access token expired` error card when that happens — just refresh."
+                  class="inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full bg-shell-700 text-[10px] font-semibold text-ink-400 select-none">?</span>
+          </label>
+          <textarea id="vertexBearerToken" class="token w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2 text-xs font-mono min-h-[60px] focus:outline-none focus:ring-2 focus:ring-brand/60"
+                    placeholder="ya29.… (paste output of `gcloud auth print-access-token`)" autocomplete="off"></textarea>
+          <p class="text-[11px] text-ink-500">
+            Run <code class="rounded bg-shell-800 px-1.5 py-0.5 text-[10px]">gcloud auth print-access-token</code>
+            and paste the result. Token lasts ~60 minutes; refresh when you see "access token expired" in a card.
+            Stored in <code class="rounded bg-shell-800 px-1.5 py-0.5 text-[10px]">chrome.storage.local</code>,
+            never sent anywhere except <code class="rounded bg-shell-800 px-1.5 py-0.5 text-[10px]">*.aiplatform.googleapis.com</code>.
+          </p>
+        </div>
 
-<h2>Cross-vendor consensus (high-confidence flags only)</h2>
-<div class="row checkbox-row">
-  <input type="checkbox" id="consensusEnabled">
-  <label for="consensusEnabled">
-    Enable consensus check on confidence 4–5 flags
-    <span class="opt-tooltip" title="Fires the enabled voices in parallel when Gemini emits a high-confidence flag (~once per podcast segment). Increases cost on flagged cards but enables the consensus badge — the pitch: no single model decides what's true.">?</span>
-  </label>
-</div>
-<div class="opt-voices disabled" id="consensus-voices-section">
-  <div class="checkbox-row">
-    <input type="checkbox" checked disabled>
-    <label>Gemini 2.5 Flash (primary classifier — always on)</label>
-  </div>
-  <div class="checkbox-row">
-    <input type="checkbox" checked disabled>
-    <label>Gemini 2.5 Pro (pre-roll dossier — always on)</label>
-  </div>
-  <div class="checkbox-row">
-    <input type="checkbox" id="voiceLlamaEnabled">
-    <label for="voiceLlamaEnabled">
-      Llama 4 Maverick (Meta)
-      <span class="opt-tooltip" title="Independent second voice. No reasoning overhead — fastest of the consensus voices.">?</span>
-    </label>
-  </div>
-  <div class="checkbox-row">
-    <input type="checkbox" id="voiceGrokEnabled">
-    <label for="voiceGrokEnabled">
-      Grok 4.1 Fast Reasoning (xAI)
-      <span class="opt-tooltip" title="Adds ~660 tokens per call due to a vendor system wrapper. Skip if cost-sensitive.">?</span>
-    </label>
-  </div>
-  <div class="checkbox-row">
-    <input type="checkbox" id="voiceClaudeEnabled">
-    <label for="voiceClaudeEnabled">
-      Claude Haiku 4.5 (Anthropic)
-      <span class="opt-tooltip" title="Anthropic on Vertex. Haiku 4.5 is fully enabled at the global endpoint as of 2026-05-21. On rate-limit (429), one retry then silent fallback to other voices.">?</span>
-    </label>
-  </div>
-</div>
+        <div class="flex flex-wrap items-center gap-3">
+          <button id="vertexTest" type="button"
+                  class="rounded-md border border-shell-700 bg-shell-800 px-3 py-1.5 text-xs text-ink-50 hover:bg-shell-700 focus:outline-none focus:ring-2 focus:ring-brand/60">
+            Test connection
+          </button>
+          <span id="vertexStatus" class="text-[11px] text-ink-500" aria-live="polite"></span>
+        </div>
+      </fieldset>
 
-<h2>Domain glossary (optional)</h2>
-<div class="row">
-  <label>Comma-separated terms the speakers use (helps correct STT mishearings)</label>
-  <textarea id="glossary" placeholder="product names, technical jargon, proper nouns"></textarea>
-</div>
+      <fieldset id="backend-lmstudio" class="backend-section mt-3 rounded-md border border-shell-700 bg-shell-800/40 p-3 sm:p-4 space-y-4">
+        <legend class="sr-only">LM Studio configuration</legend>
 
-<div class="row">
-  <button id="save">Save</button>
-  <button id="clear" class="secondary">Clear token</button>
-  <span id="status" class="status"></span>
-</div>
+        <div class="space-y-2">
+          <label for="lmEndpoint" class="block text-xs text-ink-400">LM Studio endpoint (default <code class="rounded bg-shell-800 px-1.5 py-0.5 text-[10px]">http://127.0.0.1:1234</code> — change only if you've remapped the port)</label>
+          <input type="text" id="lmEndpoint" placeholder="http://127.0.0.1:1234"
+                 class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/60">
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex items-center gap-3 flex-wrap">
+            <label for="lmModel" class="block text-xs text-ink-400">Local model</label>
+            <button id="lmDiscover" type="button"
+                    class="rounded-md border border-shell-700 bg-shell-800 px-2 py-0.5 text-[11px] text-ink-50 hover:bg-shell-700 focus:outline-none focus:ring-2 focus:ring-brand/60">
+              🔍 Discover
+            </button>
+          </div>
+          <select id="lmModel" class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/60">
+            <option value="gemma-3-12b-it">gemma-3-12b-it</option>
+          </select>
+          <p id="lmModelBadge" class="text-[11px] text-ink-500"></p>
+          <p class="text-[11px] text-ink-500">
+            Validated: <code class="rounded bg-shell-800 px-1.5 py-0.5 text-[10px]">gemma-3-12b-it</code>.
+            Other local models (qwen-family, smaller variants) showed format-leak and opener-lock issues in our bench — may underperform on fact-flag mode. Use at your own risk.
+          </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3">
+          <button id="lmTest" type="button"
+                  class="rounded-md border border-shell-700 bg-shell-800 px-3 py-1.5 text-xs text-ink-50 hover:bg-shell-700 focus:outline-none focus:ring-2 focus:ring-brand/60">
+            Test connection
+          </button>
+          <span id="lmStatus" class="text-[11px] text-ink-500" aria-live="polite"></span>
+        </div>
+      </fieldset>
+    </section>
+
+    <!-- Mode -->
+    <section aria-labelledby="mode-heading" class="space-y-4">
+      <h2 id="mode-heading" class="text-xs font-semibold uppercase tracking-wider text-ink-400">Mode</h2>
+
+      <div class="space-y-2">
+        <label for="mode" class="block text-xs text-ink-400">What kind of commentary</label>
+        <select id="mode" class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/60">
+          <option value="factflag">Fact-flag (default — questionable claims)</option>
+          <option value="question">Sharp question (partner-grade interruptions)</option>
+          <option value="missing">Missing info (ownership / number / date gaps)</option>
+          <option value="summary">Rolling summary (decisions / topics)</option>
+        </select>
+      </div>
+
+      <div class="flex items-start gap-3">
+        <input type="checkbox" id="chitchatGate" checked
+               class="mt-0.5 h-4 w-4 rounded border-shell-700 bg-shell-800 text-brand focus:ring-brand/60 focus:ring-offset-shell-900">
+        <label for="chitchatGate" class="text-xs leading-relaxed text-ink-400">
+          Chitchat gate (skip ad reads, digressions, social filler — saves ~30% API spend on podcasts)
+        </label>
+      </div>
+    </section>
+
+    <!-- Citation sourcing -->
+    <section aria-labelledby="citation-heading" class="space-y-4">
+      <h2 id="citation-heading" class="text-xs font-semibold uppercase tracking-wider text-ink-400">Citation sourcing</h2>
+
+      <div class="space-y-2">
+        <label for="sourcePref" class="block text-xs text-ink-400">Which kinds of outlets should the citation retriever prefer?</label>
+        <select id="sourcePref" class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/60">
+          <option value="primary">Primary sources only (govt stats, peer-reviewed journals, AP/Reuters, encyclopedias)</option>
+          <option value="centrist">Centrist outlets (Reuters, AP, BBC, The Economist, Bloomberg)</option>
+          <option value="left">Left-leaning mainstream (NYT, WaPo, Guardian, NPR, Atlantic, ProPublica)</option>
+          <option value="right">Right-leaning mainstream (WSJ news, National Review, Washington Examiner, Fox News, The Dispatch)</option>
+          <option value="all">Any reputable source (no profile filter)</option>
+        </select>
+        <p class="text-[11px] text-ink-500">
+          Steers which links the citation model attaches under each fact-check card. Does NOT affect what gets flagged — the fact-check itself uses the same model and prompt regardless of this preference. Citation grounds via Gemini's Google Search tool on the Vertex backend.
+        </p>
+      </div>
+    </section>
+
+    <!-- Consensus -->
+    <section aria-labelledby="consensus-heading" class="space-y-4">
+      <h2 id="consensus-heading" class="text-xs font-semibold uppercase tracking-wider text-ink-400">Cross-vendor consensus (high-confidence flags only)</h2>
+
+      <div class="flex items-start gap-3">
+        <input type="checkbox" id="consensusEnabled"
+               class="mt-0.5 h-4 w-4 rounded border-shell-700 bg-shell-800 text-brand focus:ring-brand/60 focus:ring-offset-shell-900">
+        <label for="consensusEnabled" class="text-xs leading-relaxed text-ink-400">
+          Enable consensus check on confidence 4–5 flags
+          <span role="tooltip" aria-label="Fires the enabled voices in parallel when Gemini emits a high-confidence flag (~once per podcast segment). Increases cost on flagged cards but enables the consensus badge — the pitch: no single model decides what's true."
+                title="Fires the enabled voices in parallel when Gemini emits a high-confidence flag (~once per podcast segment). Increases cost on flagged cards but enables the consensus badge — the pitch: no single model decides what's true."
+                class="inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full bg-shell-700 text-[10px] font-semibold text-ink-400 select-none">?</span>
+        </label>
+      </div>
+
+      <div id="consensus-voices-section" class="opt-voices disabled space-y-2 border-l-2 border-shell-700 pl-4">
+        <div class="flex items-center gap-3">
+          <input type="checkbox" checked disabled class="h-4 w-4 rounded border-shell-700 bg-shell-800">
+          <label class="text-xs text-ink-50">Gemini 2.5 Flash (primary classifier — always on)</label>
+        </div>
+        <div class="flex items-center gap-3">
+          <input type="checkbox" checked disabled class="h-4 w-4 rounded border-shell-700 bg-shell-800">
+          <label class="text-xs text-ink-50">Gemini 2.5 Pro (pre-roll dossier — always on)</label>
+        </div>
+        <div class="flex items-center gap-3">
+          <input type="checkbox" id="voiceLlamaEnabled" class="h-4 w-4 rounded border-shell-700 bg-shell-800 text-brand focus:ring-brand/60 focus:ring-offset-shell-900">
+          <label for="voiceLlamaEnabled" class="text-xs text-ink-50">
+            Llama 4 Maverick (Meta)
+            <span role="tooltip" title="Independent second voice. No reasoning overhead — fastest of the consensus voices."
+                  class="inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full bg-shell-700 text-[10px] font-semibold text-ink-400 select-none">?</span>
+          </label>
+        </div>
+        <div class="flex items-center gap-3">
+          <input type="checkbox" id="voiceGrokEnabled" class="h-4 w-4 rounded border-shell-700 bg-shell-800 text-brand focus:ring-brand/60 focus:ring-offset-shell-900">
+          <label for="voiceGrokEnabled" class="text-xs text-ink-50">
+            Grok 4.1 Fast Reasoning (xAI)
+            <span role="tooltip" title="Adds ~660 tokens per call due to a vendor system wrapper. Skip if cost-sensitive."
+                  class="inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full bg-shell-700 text-[10px] font-semibold text-ink-400 select-none">?</span>
+          </label>
+        </div>
+        <div class="flex items-center gap-3">
+          <input type="checkbox" id="voiceClaudeEnabled" class="h-4 w-4 rounded border-shell-700 bg-shell-800 text-brand focus:ring-brand/60 focus:ring-offset-shell-900">
+          <label for="voiceClaudeEnabled" class="text-xs text-ink-50">
+            Claude Haiku 4.5 (Anthropic)
+            <span role="tooltip" title="Anthropic on Vertex. Haiku 4.5 is fully enabled at the global endpoint as of 2026-05-21. On rate-limit (429), one retry then silent fallback to other voices."
+                  class="inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full bg-shell-700 text-[10px] font-semibold text-ink-400 select-none">?</span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <!-- Glossary -->
+    <section aria-labelledby="glossary-heading" class="space-y-2">
+      <h2 id="glossary-heading" class="text-xs font-semibold uppercase tracking-wider text-ink-400">Domain glossary <span class="text-ink-500 normal-case font-normal">(optional)</span></h2>
+
+      <label for="glossary" class="block text-xs text-ink-400">Comma-separated terms the speakers use (helps correct STT mishearings)</label>
+      <textarea id="glossary" placeholder="product names, technical jargon, proper nouns"
+                class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2 text-sm min-h-[80px] focus:outline-none focus:ring-2 focus:ring-brand/60"></textarea>
+    </section>
+
+    <!-- Action bar -->
+    <footer class="flex flex-wrap items-center gap-3 pt-2 border-t border-shell-700">
+      <button id="save" type="button"
+              class="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-brand/90 focus:outline-none focus:ring-2 focus:ring-brand/60">
+        Save
+      </button>
+      <button id="clear" type="button"
+              class="rounded-md border border-shell-700 bg-shell-800 px-4 py-2 text-sm text-ink-50 hover:bg-shell-700 focus:outline-none focus:ring-2 focus:ring-brand/60">
+        Clear token
+      </button>
+      <span id="status" class="text-xs text-good" aria-live="polite"></span>
+    </footer>
+
+  </form>
+</main>
 
 <script src="options.js"></script>
 </body>

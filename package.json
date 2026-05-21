@@ -1,0 +1,10 @@
+{
+  "name": "live-factcheck-sidebar",
+  "version": "0.5.1",
+  "private": true,
+  "type": "module",
+  "description": "Test surface for chrome-extension/ — runs the pure-function unit tests under Node's native test runner. No bundler, no dependencies.",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}

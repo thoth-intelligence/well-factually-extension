@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Live Fact-Check Sidebar",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Streams live fact-flags alongside YouTube videos via Vertex AI (Gemini Flash primary, optional Llama/Grok/Claude consensus) or a local LM Studio server.",
   "permissions": ["storage", "alarms"],
   "host_permissions": [

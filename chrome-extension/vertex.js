@@ -51,35 +51,46 @@ export function buildVertexUrl({ region }, projectId) {
   // The global endpoint drops the region prefix from the host AND uses
   // `locations/global` in the path. Regional endpoints embed the region in
   // both places. Confirmed via the 2026-05-19 smoke test against all four
-  // shipping models.
+  // shipping models. v0.5.1: projectId is encodeURIComponent'd to defuse
+  // any '/', '?', or '#' that would otherwise let a malformed project ID
+  // redirect the request to a different Google API path within the same
+  // host (matches the test-connection handler in options.js).
+  const safeProject = encodeURIComponent(projectId);
   if (region === "global") {
-    return `https://aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/global/endpoints/openapi/chat/completions`;
+    return `https://aiplatform.googleapis.com/v1beta1/projects/${safeProject}/locations/global/endpoints/openapi/chat/completions`;
   }
-  return `https://${region}-aiplatform.googleapis.com/v1beta1/projects/${projectId}/locations/${region}/endpoints/openapi/chat/completions`;
+  return `https://${region}-aiplatform.googleapis.com/v1beta1/projects/${safeProject}/locations/${region}/endpoints/openapi/chat/completions`;
 }
 
-// getAccessToken — D1=B path: bearer token paste field, 60-minute lifespan.
-// Track A (chrome.identity OAuth) will branch here in v9.5.1 without changing
-// any caller signature.
-export async function getAccessToken() {
-  const { vertexBearerToken } = await chrome.storage.local.get({ vertexBearerToken: "" });
+// getAuthAndProject — fused storage read. v0.5.1 collapses the prior
+// sequential getAccessToken + getProjectId pair into a single
+// chrome.storage.local.get call so a conf-4/5 tick (chitchat + classifier +
+// citation + 3 consensus voices = up to 6 callVertex invocations) does 1
+// storage hop instead of 12. The original two-getter API is preserved for
+// callers that genuinely need only one of the values.
+async function getAuthAndProject() {
+  const { vertexBearerToken, gcpProjectId } = await chrome.storage.local.get({
+    vertexBearerToken: "",
+    gcpProjectId: "",
+  });
   const t = (vertexBearerToken || "").trim();
+  const p = (gcpProjectId || "").trim();
   if (!t) {
     throw new Error(
       "No Vertex AI access token set. Open extension Options and paste a fresh `gcloud auth print-access-token` value.",
     );
   }
-  return t;
-}
-
-export async function getProjectId() {
-  const { gcpProjectId } = await chrome.storage.local.get({ gcpProjectId: "" });
-  const p = (gcpProjectId || "").trim();
   if (!p) {
     throw new Error("No GCP project ID set. Open extension Options and enter your project ID.");
   }
-  return p;
+  return { token: t, projectId: p };
 }
+
+// getAccessToken / getProjectId kept as exports for any caller that genuinely
+// needs a single value (currently none in tree, but the surface is part of
+// the module's public contract).
+export async function getAccessToken() { return (await getAuthAndProject()).token; }
+export async function getProjectId() { return (await getAuthAndProject()).projectId; }
 
 // callVertex — single dispatch point for every Vertex call. The role argument
 // is the registry key, not a model slug; this is deliberate so that
@@ -96,8 +107,7 @@ export async function callVertex(role, messages, opts = {}) {
   const entry = MODEL_REGISTRY[role];
   if (!entry) throw new Error(`Unknown Vertex role: ${role}`);
 
-  const token = await getAccessToken();
-  const projectId = await getProjectId();
+  const { token, projectId } = await getAuthAndProject();
 
   const body = {
     model: entry.slug,

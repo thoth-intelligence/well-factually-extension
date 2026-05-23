@@ -34,6 +34,9 @@ import {
   callVertex, extractText, toMessages, withTimeout,
   callGeminiWithSearch, extractGroundedCitation,
 } from "./vertex.js";
+import {
+  isStudioConfigured, callGeminiStudioSearch, callGeminiStudioPlain,
+} from "./gemini-studio.js";
 import { aggregateConsensus, sanitizeUploaderText, sanitizeError, is429,
          V9_DEAD_STORAGE_KEYS } from "./consensus.js";
 
@@ -91,6 +94,10 @@ async function getSettings() {
         voiceLlamaEnabled: false,
         voiceGrokEnabled: false,
         voiceClaudeEnabled: false,
+        // v0.6.0: optional Google AI Studio API key. When set, citation +
+        // dossier route through generativelanguage.googleapis.com instead
+        // of Vertex AI's `:generateContent` endpoint. Separate quota pool.
+        geminiStudioKey: "",
       },
       resolve,
     );
@@ -140,24 +147,29 @@ function withPrimaryTimeout(fn, ms) {
 
 // retrieveCitation — best-effort grounded citation through Gemini Flash.
 //
-// v0.5.2 (2026-05-21): switched from the OpenAI-compat chat/completions
-// surface (which silently ignored the googleSearch tool) to the native
-// :generateContent endpoint via callGeminiWithSearch. Source URL now comes
-// from candidates[].groundingMetadata.groundingChunks[].web — no fragile
-// JSON-in-text extraction. The model's narrative becomes the excerpt.
+// v0.5.2: switched from the OpenAI-compat chat/completions surface (which
+// silently ignored the googleSearch tool) to the native :generateContent
+// endpoint via callGeminiWithSearch. Source URL now comes from
+// candidates[].groundingMetadata.groundingChunks[].web.
 //
-// If the model didn't actually invoke search (groundingChunks empty), or
-// emitted NONE, extractGroundedCitation returns null and no citation card
-// renders — same graceful-degradation contract as before.
+// v0.6.0: if a Google AI Studio API key is configured, route through Studio
+// instead of Vertex. Studio has a completely separate quota pool, so the
+// v0.5.x Vertex 5-RPM new-project ceiling no longer applies to citation
+// calls. extractGroundedCitation works on both response shapes — Vertex
+// :generateContent and Studio :generateContent return the same envelope.
 async function retrieveCitation({ flagText, sourcePref }) {
   const sys = buildCitationSystemPrompt(sourcePref);
+  const user = `Fact-check note:\n${flagText}`;
   try {
+    const useStudio = await isStudioConfigured();
     const resp = await withPrimaryTimeout(
-      (controller) => callGeminiWithSearch(
-        sys,
-        `Fact-check note:\n${flagText}`,
-        { maxTokens: 800, temperature: 0.0, signal: controller.signal },
-      ),
+      (controller) => useStudio
+        ? callGeminiStudioSearch("citation", sys, user, {
+            maxTokens: 800, temperature: 0.0, signal: controller.signal,
+          })
+        : callGeminiWithSearch(sys, user, {
+            maxTokens: 800, temperature: 0.0, signal: controller.signal,
+          }),
       PRIMARY_TIMEOUT_MS,
     );
     return extractGroundedCitation(resp);
@@ -215,19 +227,26 @@ ${safeDescription || "(no description provided)"}
 Briefing:`;
 
   try {
+    // v0.6.0: if Studio key set, route via Studio (separate quota pool).
+    // Otherwise use Vertex OpenAI-compat. extractText handles both shapes.
+    const useStudio = await isStudioConfigured();
     const resp = await withPrimaryTimeout(
-      (controller) => callVertex("dossier", toMessages(sys, user), {
-        // v0.5.2: was 320, which was a Gemini Flash-era budget. Gemini Pro
-        // with thinking enabled (the dossier role intentionally allows
-        // thinking) burns 200-500 reasoning tokens BEFORE output starts.
-        // At maxTokens=320, real briefings truncated mid-sentence. 2000
-        // covers ~500 thinking + ~1500 output (~250 words), and the
-        // ≤120-word system instruction caps the actual emitted text well
-        // below that ceiling.
-        maxTokens: 2000,
-        temperature: 0.4,
-        signal: controller.signal,
-      }),
+      (controller) => useStudio
+        ? callGeminiStudioPlain("dossier", sys, user, {
+            maxTokens: 2000,
+            temperature: 0.4,
+            thinkingBudget: null,  // dossier is latency-tolerant; allow thinking
+            signal: controller.signal,
+          })
+        : callVertex("dossier", toMessages(sys, user), {
+            // v0.5.2 bumped 320 → 2000: Gemini Pro with thinking burns
+            // 200-500 reasoning tokens before output. At 320, briefings
+            // truncated mid-sentence. 2000 covers worst case + the
+            // ≤120-word system-prompt cap.
+            maxTokens: 2000,
+            temperature: 0.4,
+            signal: controller.signal,
+          }),
       DOSSIER_TIMEOUT_MS,
     );
     const raw = extractText(resp);

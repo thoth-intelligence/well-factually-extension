@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Live Fact-Check Sidebar",
-  "version": "0.5.4",
-  "description": "Streams live fact-flags alongside YouTube videos via Vertex AI (Gemini Flash primary, optional Llama/Grok/Claude consensus) or a local LM Studio server.",
+  "version": "0.6.0",
+  "description": "Streams live fact-flags alongside YouTube videos via Vertex AI (Gemini Flash primary, optional Llama/Grok/Claude consensus) with optional Google AI Studio fallback for the citation + dossier paths. Local LM Studio backend also supported.",
   "permissions": ["storage", "alarms"],
   "host_permissions": [
     "https://www.youtube.com/*",
@@ -10,6 +10,7 @@
     "https://aiplatform.googleapis.com/*",
     "https://*.aiplatform.googleapis.com/*",
     "https://oauth2.googleapis.com/*",
+    "https://generativelanguage.googleapis.com/*",
     "http://127.0.0.1/*",
     "http://localhost/*",
     "http://127.0.0.1:*/*",

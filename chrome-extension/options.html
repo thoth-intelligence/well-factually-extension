@@ -109,6 +109,23 @@
           </button>
           <span id="vertexStatus" class="text-[11px] text-ink-500" aria-live="polite"></span>
         </div>
+
+        <hr class="border-shell-700/60">
+
+        <div class="space-y-2">
+          <label for="geminiStudioKey" class="flex items-center gap-1 text-xs text-ink-400">
+            Google AI Studio API key
+            <span class="text-[10px] text-ink-500">— optional, bypasses Vertex quota for citation + dossier</span>
+            <span role="tooltip" aria-label="When set, citation + dossier calls route through generativelanguage.googleapis.com (Google AI Studio) which has a completely separate quota pool from Vertex AI. Useful when Vertex quotas are still at the new-project default. Get a free key at https://aistudio.google.com/apikey"
+                  title="When set, citation + dossier calls route through generativelanguage.googleapis.com (Google AI Studio) which has a completely separate quota pool from Vertex AI. Useful when Vertex quotas are still at the new-project default. Get a free key at https://aistudio.google.com/apikey"
+                  class="inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full bg-shell-700 text-[10px] font-semibold text-ink-400 select-none">?</span>
+          </label>
+          <input type="password" id="geminiStudioKey" placeholder="AIza… (optional)" autocomplete="off"
+                 class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-brand/60">
+          <p class="text-[11px] text-ink-500">
+            Get one free at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" class="text-brand hover:underline">aistudio.google.com/apikey</a>. Leave blank to keep using Vertex for everything.
+          </p>
+        </div>
       </fieldset>
 
       <fieldset id="backend-lmstudio" class="backend-section mt-3 rounded-md border border-shell-700 bg-shell-800/40 p-3 sm:p-4 space-y-4">

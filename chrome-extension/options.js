@@ -13,6 +13,7 @@ const els = {
   vertexBearerToken: document.getElementById("vertexBearerToken"),
   vertexTest: document.getElementById("vertexTest"),
   vertexStatus: document.getElementById("vertexStatus"),
+  geminiStudioKey: document.getElementById("geminiStudioKey"),
   lmEndpoint: document.getElementById("lmEndpoint"),
   lmModel: document.getElementById("lmModel"),
   lmModelBadge: document.getElementById("lmModelBadge"),
@@ -39,6 +40,7 @@ const DEFAULTS = {
   backend: "vertex",
   gcpProjectId: "",
   vertexBearerToken: "",
+  geminiStudioKey: "",
   lmEndpoint: "http://127.0.0.1:1234",
   lmModel: "gemma-3-12b-it",
   mode: "factflag",
@@ -58,6 +60,7 @@ chrome.storage.local.get(DEFAULTS, (s) => {
   els.backend.value = s.backend;
   els.gcpProjectId.value = s.gcpProjectId;
   els.vertexBearerToken.value = s.vertexBearerToken;
+  els.geminiStudioKey.value = s.geminiStudioKey;
   els.lmEndpoint.value = s.lmEndpoint;
   if (s.lmModel && ![...els.lmModel.options].some(o => o.value === s.lmModel)) {
     els.lmModel.add(new Option(s.lmModel, s.lmModel));
@@ -223,6 +226,7 @@ els.save.addEventListener("click", () => {
       backend: els.backend.value,
       gcpProjectId: projectId,
       vertexBearerToken: token,
+      geminiStudioKey: els.geminiStudioKey.value.trim(),
       lmEndpoint: els.lmEndpoint.value.trim() || DEFAULTS.lmEndpoint,
       lmModel: els.lmModel.value,
       mode: els.mode.value,

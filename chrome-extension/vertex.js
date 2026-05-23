@@ -147,11 +147,20 @@ export async function callVertex(role, messages, opts = {}) {
   return await resp.json();
 }
 
-// Extract the text content from a Vertex/OpenAI-compat response envelope.
-// Encapsulated here so callers do not poke at choices[0].message.content
-// in five places.
-export function extractText(vertexResponse) {
-  return (vertexResponse?.choices?.[0]?.message?.content || "").trim();
+// extractText — pulls the model's text response from either the
+// OpenAI-compat envelope (Vertex chat/completions: choices[0].message.content)
+// OR the native :generateContent envelope (Vertex native + Studio:
+// candidates[0].content.parts[].text). v0.6.0 unifies these so callers
+// don't branch on which path produced the response.
+export function extractText(resp) {
+  if (resp?.choices?.[0]?.message?.content) {
+    return String(resp.choices[0].message.content).trim();
+  }
+  const parts = resp?.candidates?.[0]?.content?.parts;
+  if (Array.isArray(parts)) {
+    return parts.map((p) => p?.text || "").join("").trim();
+  }
+  return "";
 }
 
 // Convenience: build the OpenAI-style messages array from system + user strings.

@@ -42,7 +42,9 @@ const DEFAULTS = {
   lmEndpoint: "http://127.0.0.1:1234",
   lmModel: "gemma-3-12b-it",
   mode: "factflag",
-  chitchatGate: true,
+  // v0.5.4: default OFF to fit the 5 RPM new-project quota. Re-enable
+  // once Vertex quota approves.
+  chitchatGate: false,
   sourcePref: "primary",
   consensusEnabled: false,
   voiceLlamaEnabled: false,

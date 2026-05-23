@@ -38,7 +38,10 @@ import { aggregateConsensus, sanitizeUploaderText, sanitizeError, is429,
          V9_DEAD_STORAGE_KEYS } from "./consensus.js";
 
 const CONTEXT_WINDOW_S = 60;
-const COMMENT_EVERY_S = 18;
+// v0.5.4: bumped 18→30 to fit under Gemini Flash's 5 RPM new-project quota.
+// Classifier + citation = 2 calls per tick (plus chitchat gate if enabled).
+// At 30s cadence: 2 calls / 30s = 4 RPM, leaves 1 RPM headroom for dossier.
+const COMMENT_EVERY_S = 30;
 const NEW_LINES_WINDOW_S = 14;
 const CONSENSUS_TIMEOUT_MS = 4000;
 const PRIMARY_TIMEOUT_MS = 12000;   // R4: classifier/chitchat/citation ceiling
@@ -78,7 +81,11 @@ async function getSettings() {
         lmModel: "gemma-3-12b-it",
         mode: "factflag",
         glossary: "",
-        chitchatGate: true,
+        // v0.5.4: default OFF — chitchat gate doubles per-tick call count
+        // (gate-call + classifier-call). At 5 RPM new-project quota, that
+        // ratio breaks the budget. User can re-enable in Options when their
+        // Vertex quota approves.
+        chitchatGate: false,
         sourcePref: "primary",
         consensusEnabled: false,
         voiceLlamaEnabled: false,
@@ -536,7 +543,12 @@ async function processTick(tabId) {
       elapsedMs,
     });
 
-    if (settings.backend === "vertex") {
+    // v0.5.4: gate citation on confidence ≥ 3. Low-confidence flags
+    // (1 "mild concern" / 2 "noteworthy gap") were burning ~50% of the
+    // citation quota for cards that don't really need a source. Higher-
+    // confidence flags (3 "meaningful", 4 "strong", 5 "clear error") are
+    // the ones the user will actually click through and verify.
+    if (settings.backend === "vertex" && cleaned.confidence != null && cleaned.confidence >= 3) {
       retrieveCitation({
         flagText: cleaned.text,
         sourcePref: settings.sourcePref,

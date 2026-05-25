@@ -1,6 +1,6 @@
-# The Receipts
+# Well, Factually
 
-> Real-time fact-checking sidebar for YouTube videos. Pulls receipts on every claim, live, while you watch.
+> Real-time fact-checking sidebar for YouTube videos. Catches every claim, live, while you watch.
 >
 > Bring your own Google Cloud project (Gemini via Vertex AI) or run fully local via LM Studio. No backend, no account, no data egress beyond the API call you authorize.
 
@@ -18,7 +18,7 @@
 
 ## Install
 
-1. [Download the latest release](https://github.com/zangiku/live-factcheck-sidebar/releases/latest) (zip file).
+1. [Download the latest release](https://github.com/thoth-intelligence/well-factually-extension/releases/latest) (zip file).
 2. Unzip.
 3. Chrome → `chrome://extensions/` → toggle **Developer mode** (top right) → **Load unpacked** → select the `chrome-extension/` folder from the unzipped directory.
 4. Right-click the extension icon → **Options** → connect your Google Cloud project (Vertex AI access) or point at `http://127.0.0.1:1234` if you're running LM Studio locally.

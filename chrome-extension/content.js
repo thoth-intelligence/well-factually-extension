@@ -30,6 +30,22 @@
       <span class="fcs-status" id="fcs-status">waiting for captions…</span>
       <span id="fcs-mode-tag">mode: factflag</span>
     </div>
+    <!-- Bias profile picker (v0.7.0) — Option B layout: pill toggle for
+         Primary/All on top, 3-position political slider beneath. Mirrors
+         the website demo's UX (assets/replica.css). Persisted to
+         chrome.storage.local under "sourcePref"; background.js reads it
+         on every citation call to pick the appropriate source family. -->
+    <div class="fcs-bias-mode-row" role="group" aria-label="Source profile">
+      <button type="button" class="fcs-bias-pill" data-mode="primary" aria-pressed="true" title="Peer-reviewed papers, primary government data, original transcripts only. No media outlets.">Primary</button>
+      <button type="button" class="fcs-bias-pill" data-mode="all" aria-pressed="false" title="No source-lean preference — whatever search ranks highest. Mostly Wikipedia.">All</button>
+      <span class="fcs-bias-info" id="fcs-bias-info" title="Primary = peer-reviewed / govt data only. All = no source filter. Or pick Left / Centrist / Right below for media outlets with that political lean.">?</span>
+    </div>
+    <div class="fcs-bias-row fcs-bias-faded" role="group" aria-label="Political bias of citations">
+      <span class="fcs-bias-end fcs-bias-end-left" title="Left-leaning publications: NYT, WaPo, Vox, Guardian, Atlantic">Left</span>
+      <input type="range" min="-1" max="1" step="1" value="0" id="fcs-bias-slider" class="fcs-bias-slider" aria-label="Political lean: Left, Centrist, Right">
+      <span class="fcs-bias-end fcs-bias-end-right" title="Right-leaning publications: WSJ, Reason, National Review, Quillette">Right</span>
+      <span class="fcs-bias-value" id="fcs-bias-value">Primary</span>
+    </div>
     <div class="fcs-body" id="fcs-body">
       <div class="fcs-empty" id="fcs-empty">
         Turn on captions (the CC button on the YouTube player) and play the video.
@@ -842,12 +858,82 @@
     );
   }
   refreshModeTag();
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Bias profile UI (v0.7.0)
+  //
+  // Two-row picker rendered above the card body (see HTML above):
+  //   Row 1: pill toggle [Primary] [All] + help ?
+  //   Row 2: 3-position slider Left / Centrist / Right + live value label
+  //
+  // Storage contract: chrome.storage.local.sourcePref = "primary"|"centrist"|
+  // "left"|"right"|"all" (lowercase, matches the Options dropdown and
+  // background.js's CITATION_PROFILES lookup). UI state derives from
+  // storage; user gestures write to storage and the storage.onChanged
+  // listener re-renders so cross-tab / Options-page edits stay in sync.
+  // ───────────────────────────────────────────────────────────────────────
+  const BIAS_SLIDER_TO_PROFILE = { "-1": "left", "0": "centrist", "1": "right" };
+  const BIAS_PROFILE_LABELS = {
+    primary: "Primary", centrist: "Centrist", left: "Left", right: "Right", all: "All"
+  };
+
+  function paintBiasUI(profile) {
+    const primaryPill = root.querySelector('.fcs-bias-pill[data-mode="primary"]');
+    const allPill = root.querySelector('.fcs-bias-pill[data-mode="all"]');
+    const biasRow = root.querySelector(".fcs-bias-row");
+    const slider = $("fcs-bias-slider");
+    const valueLabel = $("fcs-bias-value");
+    const isPolitical = profile === "left" || profile === "centrist" || profile === "right";
+    if (primaryPill) primaryPill.setAttribute("aria-pressed", String(profile === "primary"));
+    if (allPill) allPill.setAttribute("aria-pressed", String(profile === "all"));
+    if (biasRow) biasRow.classList.toggle("fcs-bias-faded", !isPolitical);
+    if (slider && isPolitical) {
+      const sliderVal = profile === "left" ? "-1" : profile === "right" ? "1" : "0";
+      if (slider.value !== sliderVal) slider.value = sliderVal;
+    }
+    if (valueLabel) valueLabel.textContent = BIAS_PROFILE_LABELS[profile] || "Primary";
+  }
+
+  function setBiasProfile(profile) {
+    if (!BIAS_PROFILE_LABELS[profile]) profile = "primary";
+    paintBiasUI(profile);
+    try {
+      chrome.storage.local.set({ sourcePref: profile });
+    } catch (_e) { /* storage unavailable — UI still updates locally */ }
+  }
+
+  function wireBiasUI() {
+    const primaryPill = root.querySelector('.fcs-bias-pill[data-mode="primary"]');
+    const allPill = root.querySelector('.fcs-bias-pill[data-mode="all"]');
+    const slider = $("fcs-bias-slider");
+    if (primaryPill) primaryPill.addEventListener("click", () => setBiasProfile("primary"));
+    if (allPill) allPill.addEventListener("click", () => setBiasProfile("all"));
+    if (slider) {
+      const onSlide = () => {
+        const v = String(parseInt(slider.value, 10));
+        setBiasProfile(BIAS_SLIDER_TO_PROFILE[v] || "centrist");
+      };
+      slider.addEventListener("input", onSlide);
+      slider.addEventListener("change", onSlide);
+    }
+    // Initial paint from persisted setting; defaults to primary.
+    if (chrome.storage && chrome.storage.local) {
+      chrome.storage.local.get({ sourcePref: "primary" }, (s) => paintBiasUI(s.sourcePref));
+    } else {
+      paintBiasUI("primary");
+    }
+  }
+  wireBiasUI();
+
   chrome.storage.onChanged?.addListener((changes) => {
     if (changes.mode || changes.backend || changes.gcpProjectId || changes.vertexBearerToken || changes.lmModel) {
       refreshModeTag();
     }
     if (changes.affiliateEnabled || changes.affiliateTag || changes.adFrequency) {
       loadAffiliateSettings();
+    }
+    if (changes.sourcePref) {
+      paintBiasUI(changes.sourcePref.newValue);
     }
   });
 

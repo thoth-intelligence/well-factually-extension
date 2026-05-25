@@ -303,6 +303,19 @@ async function callBackend({ settings, role, system, user, maxTokens, temperatur
       system, user, maxTokens, temperature, signal,
     });
   }
+  // v0.7.0: when a Google AI Studio API key is configured, route the
+  // primary classifier through it instead of Vertex. Studio's free-tier
+  // quota (15 RPM for Gemini 2.5 Flash) is significantly more forgiving
+  // than Vertex's new-project default (5 RPM) — most users hit Vertex
+  // 429s within minutes of opening a debate clip with chitchat-gate on,
+  // while Studio comfortably handles ~12 calls/min.
+  //
+  // Citation and dossier paths already had this fallback; the primary
+  // factflag path didn't, so users still saw rate-limit pauses even
+  // with Studio configured. This unifies the routing.
+  if (await isStudioConfigured()) {
+    return callGeminiStudioPlain(role, system, user, { maxTokens, temperature, signal });
+  }
   const resp = await callVertex(role, toMessages(system, user), { maxTokens, temperature, signal });
   return extractText(resp);
 }

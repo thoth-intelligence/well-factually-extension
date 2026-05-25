@@ -117,38 +117,39 @@ test("error: regex-special chars in project ID don't break replacement", () => {
 // v0.5.3 — friendly copy for the common HTTP status patterns
 // ─────────────────────────────────────────────────────────────────────────
 
-test("error: 429 rewrites to clean rate-limit copy (no raw URL leak)", () => {
+test("error: 429 rewrites to clean user-friendly copy (no raw URL leak)", () => {
+  // v0.7.0: copy rewritten to be friendlier and point at AI Studio fix.
+  // We still assert: short, no raw URL, mentions pause + Studio remedy.
   const raw = 'Vertex classifier HTTP 429: [{ "error": { "code": 429, "message": "Resource exhausted. Please try again later. Please refer to https://cloud.google.com/vertex-a';
   const r = sanitizeError(raw);
-  assert.match(r, /[Rr]ate.?limited/);
-  assert.match(r, /[Pp]ausing/);
+  assert.match(r, /[Pp]aused?/);
+  assert.match(r, /Studio/i, `should point user toward AI Studio remedy: ${r}`);
   assert.ok(!r.includes("https://cloud.google.com/vertex-a"), `still leaks URL: ${r}`);
-  assert.ok(r.length <= 200);
+  assert.ok(r.length <= 220);
 });
 
-test("error: 'Resource exhausted' anywhere triggers rate-limit copy", () => {
+test("error: 'Resource exhausted' anywhere triggers paused copy", () => {
   const r = sanitizeError("Some weirdly nested Resource exhausted thing");
-  assert.match(r, /[Rr]ate.?limited/);
+  assert.match(r, /[Pp]aused?/);
 });
 
 test("error: 401 rewrites to access-token-expired copy", () => {
   const raw = "Vertex 401 — your access token expired or is invalid. Refresh in Options.";
   const r = sanitizeError(raw);
   assert.match(r, /token expired/i);
-  assert.match(r, /[Oo]ptions/);
+  assert.match(r, /[Ss]ettings|[Oo]ptions/);
 });
 
 test("error: 403 rewrites to permission-denied copy", () => {
   const raw = "Vertex 403 — project lacks access to anthropic/claude-haiku-4-5";
   const r = sanitizeError(raw);
-  assert.match(r, /403/);
-  assert.match(r, /access/i);
+  assert.match(r, /denied|permission/i);
 });
 
 test("error: 429 case wins over 401/403 if both appear (defensive ordering)", () => {
   // Models sometimes echo status chains. 429 is the most actionable, prefer it.
   const r = sanitizeError("HTTP 429 Resource exhausted; HTTP 401 invalid");
-  assert.match(r, /[Rr]ate.?limited/);
+  assert.match(r, /[Pp]aused?/);
 });
 
 // is429 — the single-source-of-truth predicate

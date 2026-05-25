@@ -88,13 +88,17 @@ export function sanitizeError(message, knownProjectId = "") {
   // The 429 case is the one most users hit first when traffic ramps:
   // Gemini's per-project per-minute quota is the binding constraint.
   if (/\b429\b/.test(s0) || /[Rr]esource exhausted/.test(s0) || /[Rr]ate ?limit/.test(s0)) {
-    return "Rate-limited by Vertex (HTTP 429). Pausing 30 seconds. Raise the Gemini quota in GCP Console → IAM → Quotas, or turn off the chitchat gate to halve the call rate.";
+    // v0.7.0: friendlier copy + actionable next step. The technical
+    // "raise the Gemini quota in GCP Console → IAM → Quotas" line was
+    // alarming to new users. Adding a free AI Studio key in Options
+    // routes around this entirely (Studio has its own quota pool).
+    return "Briefly paused — Google's free quota is busy. Adding a free AI Studio API key in Settings gives you more room and prevents this. Resumes in 30 seconds.";
   }
   if (/\b401\b/.test(s0) || /[Aa]ccess token (?:expired|invalid)/.test(s0)) {
-    return "Vertex access token expired. Refresh in Options: gcloud auth print-access-token, paste, save.";
+    return "Your Google Cloud access token expired (these last about an hour). In Settings, paste a new one from `gcloud auth print-access-token`.";
   }
   if (/\b403\b/.test(s0) || /permission denied/i.test(s0)) {
-    return "Vertex 403 — project lacks access to the model, or the Generative Language API is not enabled.";
+    return "Google Cloud denied this request. Check that Vertex AI is enabled on your project and that the access token has permission to use it.";
   }
 
   let s = s0;

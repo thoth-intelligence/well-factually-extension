@@ -297,6 +297,35 @@
       </div>
     </section>
 
+    <!-- Pro subscription -->
+    <section aria-labelledby="pro-heading">
+      <div class="mb-4">
+        <h2 id="pro-heading" class="text-sm font-semibold tracking-tight text-ink-50">Pro subscription
+          <span class="ml-1 text-xs font-normal text-ink-500">— ad-free</span>
+        </h2>
+        <p class="mt-1 text-xs text-ink-400">Subscribers see no sponsored book cards in the sidebar. Paste the license code from your subscription confirmation page to activate.</p>
+      </div>
+
+      <div class="space-y-3 rounded-lg border border-shell-700 bg-shell-850 p-4 sm:p-5">
+        <div class="space-y-2">
+          <label for="proLicense" class="block text-sm font-medium text-ink-50">License code</label>
+          <input id="proLicense" type="text" placeholder="cus_…" autocomplete="off" spellcheck="false"
+                 class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-brand/60">
+          <p class="text-xs text-ink-400">
+            You got this code on the success page after subscribing at <a href="https://well-factually.com/#pricing" target="_blank" rel="noopener noreferrer" class="help-link">well-factually.com</a>. Lost it? <a href="https://billing.stripe.com/p/login/test_5kAfZk7tBeqJ3LO000" target="_blank" rel="noopener noreferrer" class="help-link">Recover via Stripe</a> or email <a href="mailto:hello@well-factually.com" class="help-link">support</a>.
+          </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3">
+          <button id="proVerify" type="button"
+                  class="rounded-md border border-shell-700 bg-shell-800 px-3 py-1.5 text-xs text-ink-50 hover:bg-shell-700 focus:outline-none focus:ring-2 focus:ring-brand/60">
+            Verify
+          </button>
+          <span id="proStatus" class="text-xs text-ink-400" aria-live="polite">Status: not configured</span>
+        </div>
+      </div>
+    </section>
+
     <!-- Domain glossary -->
     <section aria-labelledby="glossary-heading">
       <div class="mb-4">

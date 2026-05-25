@@ -29,6 +29,10 @@ const els = {
   voiceGrokEnabled: document.getElementById("voiceGrokEnabled"),
   voiceClaudeEnabled: document.getElementById("voiceClaudeEnabled"),
   glossary: document.getElementById("glossary"),
+  // v0.7.0 Pro tier
+  proLicense: document.getElementById("proLicense"),
+  proVerify: document.getElementById("proVerify"),
+  proStatus: document.getElementById("proStatus"),
   save: document.getElementById("save"),
   clear: document.getElementById("clear"),
   status: document.getElementById("status"),
@@ -57,6 +61,14 @@ const DEFAULTS = {
   voiceGrokEnabled: false,
   voiceClaudeEnabled: false,
   glossary: "",
+  // v0.7.0 Pro tier — license is the Stripe customer ID (cus_xxx).
+  // proIsActive + proExpiresAt + proValidatedAt are populated by the
+  // license-check call in background; we only need to remember the
+  // license string here so users don't have to re-paste on every load.
+  proLicense: "",
+  proIsActive: false,
+  proExpiresAt: null,
+  proValidatedAt: 0,
 };
 // Affiliate / ad-slot defaults are NOT mutable from Options on purpose —
 // they're shipped behavior, not user toggles. content.js + affiliate.js
@@ -82,10 +94,80 @@ chrome.storage.local.get(DEFAULTS, (s) => {
   els.voiceGrokEnabled.checked = s.voiceGrokEnabled;
   els.voiceClaudeEnabled.checked = s.voiceClaudeEnabled;
   els.glossary.value = s.glossary;
+  if (els.proLicense) els.proLicense.value = s.proLicense || "";
+  renderProStatus(s);
   refreshBackendSection();
   refreshLmModelBadge();
   refreshConsensusSection();
 });
+
+// v0.7.0 Pro tier — render the Pro status line below the license input.
+// Pulls from the cached chrome.storage.local state (proIsActive,
+// proExpiresAt, proValidatedAt). The verify button below calls into
+// background.js (or fetches directly) to refresh.
+function renderProStatus(s) {
+  if (!els.proStatus) return;
+  if (!s.proLicense || !s.proLicense.trim()) {
+    els.proStatus.textContent = "Status: not configured";
+    els.proStatus.className = "text-xs text-ink-400";
+    return;
+  }
+  if (s.proIsActive) {
+    const expires = s.proExpiresAt
+      ? new Date(s.proExpiresAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
+      : null;
+    els.proStatus.textContent = expires
+      ? `Status: PRO — renews ${expires}`
+      : "Status: PRO — active";
+    els.proStatus.className = "text-xs text-good";
+  } else if (s.proValidatedAt) {
+    els.proStatus.textContent = "Status: code not active (cancelled or invalid)";
+    els.proStatus.className = "text-xs text-warn";
+  } else {
+    els.proStatus.textContent = "Status: not yet verified — click Verify";
+    els.proStatus.className = "text-xs text-ink-400";
+  }
+}
+
+// Verify button — POST the license to /api/license-check, store the
+// result in chrome.storage.local. Same endpoint the extension's
+// background uses for the periodic 24h revalidation.
+if (els.proVerify) {
+  els.proVerify.addEventListener("click", async () => {
+    const license = (els.proLicense.value || "").trim();
+    if (!license) {
+      els.proStatus.textContent = "Paste a license code first.";
+      els.proStatus.className = "text-xs text-warn";
+      return;
+    }
+    if (!/^cus_[A-Za-z0-9]+$/.test(license)) {
+      els.proStatus.textContent = "Malformed code — should start with cus_";
+      els.proStatus.className = "text-xs text-warn";
+      return;
+    }
+    els.proStatus.textContent = "Verifying…";
+    els.proStatus.className = "text-xs text-ink-400";
+    try {
+      const res = await fetch("https://well-factually.com/api/license-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ license }),
+      });
+      const data = await res.json();
+      const now = Date.now();
+      const update = {
+        proLicense: license,
+        proIsActive: !!data.pro,
+        proExpiresAt: data.expires_at || null,
+        proValidatedAt: now,
+      };
+      chrome.storage.local.set(update, () => renderProStatus(update));
+    } catch (err) {
+      els.proStatus.textContent = "Couldn't reach the verify server. Try again in a moment.";
+      els.proStatus.className = "text-xs text-warn";
+    }
+  });
+}
 
 function flash(msg, isErr = false) {
   els.status.textContent = msg;
@@ -245,6 +327,11 @@ els.save.addEventListener("click", () => {
       voiceGrokEnabled: els.voiceGrokEnabled.checked,
       voiceClaudeEnabled: els.voiceClaudeEnabled.checked,
       glossary: els.glossary.value,
+      // v0.7.0: persist the license string. proIsActive / proExpiresAt /
+      // proValidatedAt are NOT written here — they're owned by the Verify
+      // button + background's periodic revalidation. Save just remembers
+      // the code so the user doesn't have to re-paste.
+      proLicense: (els.proLicense && els.proLicense.value.trim()) || "",
     },
     () => flash("Saved ✓"),
   );

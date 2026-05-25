@@ -570,3 +570,23 @@
   background: rgba(240, 185, 106, 0.12);
   border-color: rgba(240, 185, 106, 0.4);
 }
+
+/* v0.7.0: Pro subscriber pill in the sidebar header.
+   Injected by applyProPill() in content.js next to .fcs-title when
+   chrome.storage.local.proIsActive is true. Removed when Pro lapses
+   or the license is cleared. */
+#fcs-root .fcs-pro-pill {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  background: linear-gradient(90deg, rgba(108, 210, 141, 0.20), rgba(108, 210, 141, 0.08));
+  border: 1px solid rgba(108, 210, 141, 0.5);
+  color: #6cd28d;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  border-radius: 3px;
+  vertical-align: middle;
+  cursor: help;
+  text-transform: uppercase;
+}

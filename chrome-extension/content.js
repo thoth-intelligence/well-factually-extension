@@ -87,6 +87,66 @@
   function clearEmpty() { if (empty.parentNode) empty.remove(); }
 
   // ───────────────────────────────────────────────────────────────────────
+  // Pro subscription gate (v0.7.0)
+  //
+  // chrome.storage.local fields managed by Options + background:
+  //   proLicense       — Stripe customer ID, format cus_xxx
+  //   proIsActive      — bool, cached result of /api/license-check
+  //   proExpiresAt     — ISO string, subscription period end
+  //   proValidatedAt   — timestamp (ms) of last successful check
+  //
+  // We revalidate against well-factually.com every 24h. If proIsActive
+  // is true at content-script boot, we force affiliateSettings.enabled=
+  // false and adFrequency=0 — no Amazon tagging, no sponsored cards.
+  // ───────────────────────────────────────────────────────────────────────
+  const PRO_REVALIDATE_MS = 24 * 60 * 60 * 1000; // 24h
+  const PRO_LICENSE_CHECK_URL = "https://well-factually.com/api/license-check";
+  let proIsActive = false;
+
+  function applyProPill() {
+    const head = root.querySelector(".fcs-head");
+    if (!head) return;
+    let pill = root.querySelector(".fcs-pro-pill");
+    if (proIsActive && !pill) {
+      pill = document.createElement("span");
+      pill.className = "fcs-pro-pill";
+      pill.textContent = "PRO";
+      pill.title = "Pro subscription active — sponsored cards hidden.";
+      // Inject right after .fcs-title so it sits in the header bar.
+      const title = head.querySelector(".fcs-title");
+      if (title && title.parentNode) {
+        title.parentNode.insertBefore(pill, title.nextSibling);
+      } else {
+        head.insertBefore(pill, head.firstChild);
+      }
+    } else if (!proIsActive && pill) {
+      pill.remove();
+    }
+  }
+
+  function maybeRevalidatePro(license, validatedAt) {
+    if (!license) return;
+    const age = Date.now() - (validatedAt || 0);
+    if (age < PRO_REVALIDATE_MS) return;
+    // Stale — fire async revalidation. Result lands in storage via
+    // storage.onChanged which re-runs loadAffiliateSettings + applyProPill.
+    fetch(PRO_LICENSE_CHECK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ license }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        chrome.storage.local.set({
+          proIsActive: !!data.pro,
+          proExpiresAt: data.expires_at || null,
+          proValidatedAt: Date.now(),
+        });
+      })
+      .catch(() => { /* network blip — keep cached state, try again next load */ });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────
   // Affiliate / sponsored ad slot (v0.7.0)
   //
   // Reads three settings from chrome.storage.local with safe defaults:
@@ -94,6 +154,9 @@
   //   affiliateTag      (str, default "thothintellig-20")
   //   adFrequency       (int, default 4)       — show sponsored card every N
   //                                              cards. 0 disables.
+  //
+  // Pro subscribers (proIsActive=true) get affiliate forced OFF and
+  // ad frequency forced to 0, regardless of these settings.
   //
   // The tag rewriter + ad inventory live in affiliate.js (loaded before this
   // script via manifest content_scripts). Access them via
@@ -115,13 +178,30 @@
       {
         affiliateEnabled: true,
         affiliateTag: __aff ? __aff.DEFAULT_AFFILIATE_TAG : "thothintellig-20",
-        adFrequency: 4
+        adFrequency: 4,
+        // v0.7.0 Pro tier: cached state from /api/license-check. Pro
+        // overrides force affiliate OFF + adFrequency 0 below.
+        proLicense: "",
+        proIsActive: false,
+        proValidatedAt: 0
       },
       (s) => {
-        affiliateSettings.enabled = !!s.affiliateEnabled;
-        affiliateSettings.tag = (typeof s.affiliateTag === "string" && s.affiliateTag.trim()) || (__aff ? __aff.DEFAULT_AFFILIATE_TAG : "thothintellig-20");
-        const f = parseInt(s.adFrequency, 10);
-        affiliateSettings.adFrequency = (Number.isFinite(f) && f >= 0) ? f : 4;
+        proIsActive = !!s.proIsActive;
+        if (proIsActive) {
+          // Pro override — no Amazon tagging, no sponsored cards.
+          affiliateSettings.enabled = false;
+          affiliateSettings.tag = (__aff ? __aff.DEFAULT_AFFILIATE_TAG : "thothintellig-20");
+          affiliateSettings.adFrequency = 0;
+        } else {
+          affiliateSettings.enabled = !!s.affiliateEnabled;
+          affiliateSettings.tag = (typeof s.affiliateTag === "string" && s.affiliateTag.trim()) || (__aff ? __aff.DEFAULT_AFFILIATE_TAG : "thothintellig-20");
+          const f = parseInt(s.adFrequency, 10);
+          affiliateSettings.adFrequency = (Number.isFinite(f) && f >= 0) ? f : 4;
+        }
+        applyProPill();
+        // If license is set but the cached check is stale (> 24h), kick
+        // off a background revalidation. Result lands via storage.
+        if (s.proLicense) maybeRevalidatePro(s.proLicense, s.proValidatedAt);
       }
     );
   }
@@ -935,6 +1015,12 @@
     }
     if (changes.sourcePref) {
       paintBiasUI(changes.sourcePref.newValue);
+    }
+    // v0.7.0: Pro state changes (license added/removed, verify result
+    // arrived) → re-run loadAffiliateSettings which now also applies the
+    // Pro override + paints the PRO pill in the sidebar header.
+    if (changes.proIsActive || changes.proLicense || changes.proValidatedAt) {
+      loadAffiliateSettings();
     }
   });
 

@@ -29,10 +29,6 @@ const els = {
   voiceGrokEnabled: document.getElementById("voiceGrokEnabled"),
   voiceClaudeEnabled: document.getElementById("voiceClaudeEnabled"),
   glossary: document.getElementById("glossary"),
-  // v0.7.0: affiliate links + sponsored ad slot config
-  affiliateEnabled: document.getElementById("affiliateEnabled"),
-  affiliateTag: document.getElementById("affiliateTag"),
-  adFrequency: document.getElementById("adFrequency"),
   save: document.getElementById("save"),
   clear: document.getElementById("clear"),
   status: document.getElementById("status"),
@@ -51,21 +47,21 @@ const DEFAULTS = {
   // v0.5.4: default OFF to fit the 5 RPM new-project quota. Re-enable
   // once Vertex quota approves.
   chitchatGate: false,
-  sourcePref: "primary",
+  // Default to "all" — primary-only is too restrictive for typical
+  // YouTube content (most claims don't have peer-reviewed sources) and
+  // showed up as "empty cards" for new users. Users can drop to primary
+  // themselves via the in-sidebar slider if they want academic rigor.
+  sourcePref: "all",
   consensusEnabled: false,
   voiceLlamaEnabled: false,
   voiceGrokEnabled: false,
   voiceClaudeEnabled: false,
   glossary: "",
-  // v0.7.0 — affiliate defaults. Tagging is opt-out (default ON) because
-  // a single user-installable extension shouldn't ship dark-pattern
-  // monetization, but the disclosure + badge + Options toggle make the
-  // arrangement legible. Default tag is the Thoth Intelligence Associates
-  // ID — override to redirect commissions to your own Associates account.
-  affiliateEnabled: true,
-  affiliateTag: "thothintellig-20",
-  adFrequency: 4,
 };
+// Affiliate / ad-slot defaults are NOT mutable from Options on purpose —
+// they're shipped behavior, not user toggles. content.js + affiliate.js
+// own the defaults and read them straight from chrome.storage.local
+// (which is empty for a fresh install, so the in-code defaults stand).
 
 // Load
 chrome.storage.local.get(DEFAULTS, (s) => {
@@ -86,9 +82,6 @@ chrome.storage.local.get(DEFAULTS, (s) => {
   els.voiceGrokEnabled.checked = s.voiceGrokEnabled;
   els.voiceClaudeEnabled.checked = s.voiceClaudeEnabled;
   els.glossary.value = s.glossary;
-  if (els.affiliateEnabled) els.affiliateEnabled.checked = s.affiliateEnabled;
-  if (els.affiliateTag) els.affiliateTag.value = s.affiliateTag;
-  if (els.adFrequency) els.adFrequency.value = s.adFrequency;
   refreshBackendSection();
   refreshLmModelBadge();
   refreshConsensusSection();
@@ -252,10 +245,6 @@ els.save.addEventListener("click", () => {
       voiceGrokEnabled: els.voiceGrokEnabled.checked,
       voiceClaudeEnabled: els.voiceClaudeEnabled.checked,
       glossary: els.glossary.value,
-      // v0.7.0 affiliate settings
-      affiliateEnabled: els.affiliateEnabled ? els.affiliateEnabled.checked : DEFAULTS.affiliateEnabled,
-      affiliateTag: (els.affiliateTag && els.affiliateTag.value.trim()) || DEFAULTS.affiliateTag,
-      adFrequency: els.adFrequency ? Math.max(0, parseInt(els.adFrequency.value, 10) || 0) : DEFAULTS.adFrequency,
     },
     () => flash("Saved ✓"),
   );

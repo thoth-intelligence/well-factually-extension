@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Live Fact-Check Sidebar — Options</title>
+  <title>Well, Factually — Settings</title>
   <!--
     Tailwind via Play CDN. Note for MV3 packaging: the Play CDN uses runtime
     JS scanning + eval, which Chrome's strict extension_pages CSP blocks. For
@@ -23,25 +23,32 @@
           colors: {
             ink: {
               50: '#e6e8ee',
+              100: '#c8ccd6',
+              200: '#a8aebd',
               400: '#8a93a6',
               500: '#525968',
+              600: '#3a3f4a',
             },
             shell: {
               900: '#0e0f12',
+              850: '#13151a',
               800: '#1c1f26',
+              750: '#22262e',
               700: '#262a33',
+              600: '#2c313c',
             },
-            brand: '#7aa2ff',
+            brand: '#f0b96a',
+            'brand-dim': '#a87f3f',
             good: '#6cd28d',
             warn: '#f0b96a',
+            danger: '#e57373',
           },
         },
       },
     };
   </script>
   <style>
-    /* Token masking — visible only on blur. Same pattern as the Vertex
-       bearer-token paste field in v0.5.0. */
+    /* Token masking — visible only on blur. */
     textarea.token { -webkit-text-security: disc; }
     textarea.token:focus { -webkit-text-security: none; }
 
@@ -52,53 +59,76 @@
 
     /* Per-voice section gray-out when consensus master toggle is off. */
     .opt-voices.disabled { opacity: 0.4; pointer-events: none; }
+
+    /* Make help links visually distinct from regular links — small, muted,
+       with a trailing arrow. Keep keyboard-accessible. */
+    .help-link {
+      font-size: 11px;
+      color: #8a93a6;
+      text-decoration: none;
+      border-bottom: 1px dashed #525968;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .help-link:hover { color: #f0b96a; border-color: #f0b96a; }
+    .help-link::after { content: " ↗"; opacity: 0.7; }
   </style>
 </head>
 <body class="min-h-screen bg-shell-900 text-ink-50 font-sans antialiased">
-<main class="mx-auto w-full max-w-2xl px-4 py-6 sm:px-8 sm:py-10">
+<main class="mx-auto w-full max-w-2xl px-5 py-8 sm:px-8 sm:py-12">
 
-  <header class="mb-6 sm:mb-8">
-    <h1 class="text-lg sm:text-xl font-semibold tracking-tight">🎬 Live Fact-Check Sidebar — Options</h1>
+  <header class="mb-8 sm:mb-10">
+    <h1 class="text-xl sm:text-2xl font-semibold tracking-tight flex items-center gap-2">
+      <span aria-hidden="true">🎬</span> Well, Factually
+    </h1>
+    <p class="mt-1 text-sm text-ink-400">Real-time YouTube fact-check sidebar — settings.</p>
   </header>
 
-  <form id="optionsForm" class="space-y-8" novalidate>
+  <form id="optionsForm" class="space-y-10" novalidate>
 
-    <!-- Backend -->
+    <!-- AI provider -->
     <section aria-labelledby="backend-heading">
-      <h2 id="backend-heading" class="text-xs font-semibold uppercase tracking-wider text-ink-400 mb-3">Backend</h2>
+      <div class="mb-4">
+        <h2 id="backend-heading" class="text-sm font-semibold tracking-tight text-ink-50">AI provider</h2>
+        <p class="mt-1 text-xs text-ink-400">Pick where fact-checking calls go. Cloud is faster and more capable; local is free and private.</p>
+      </div>
+
       <div class="space-y-2">
-        <label for="backend" class="block text-xs text-ink-400">Where to send caption windows for fact-checking</label>
         <select id="backend"
-                class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2 text-sm text-ink-50 focus:outline-none focus:ring-2 focus:ring-brand/60">
-          <option value="vertex">Vertex AI (cloud — Gemini Flash primary, optional Llama/Grok/Claude consensus)</option>
-          <option value="lmstudio">LM Studio (local — free, private, requires local server)</option>
+                class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2.5 text-sm text-ink-50 focus:outline-none focus:ring-2 focus:ring-brand/60">
+          <option value="vertex">Google Cloud Vertex AI (cloud — Gemini, optional second-opinion voices)</option>
+          <option value="lmstudio">LM Studio (local — runs on your computer, no cloud, no cost)</option>
         </select>
       </div>
 
-      <fieldset id="backend-vertex" class="backend-section active mt-3 rounded-md border border-shell-700 bg-shell-800/40 p-3 sm:p-4 space-y-4">
+      <!-- Vertex configuration -->
+      <fieldset id="backend-vertex" class="backend-section active mt-4 rounded-lg border border-shell-700 bg-shell-850 p-4 sm:p-5 space-y-5">
         <legend class="sr-only">Vertex AI configuration</legend>
 
         <div class="space-y-2">
-          <label for="gcpProjectId" class="block text-xs text-ink-400">Google Cloud Project ID</label>
+          <label for="gcpProjectId" class="block text-sm font-medium text-ink-50">Google Cloud Project ID</label>
           <input type="text" id="gcpProjectId" placeholder="my-gcp-project-id" autocomplete="off"
-                 class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/60">
-          <p class="text-[11px] text-ink-500">The project where Vertex AI is enabled and quotas are filed.</p>
+                 class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand/60">
+          <p class="text-xs text-ink-400">
+            The project where you've enabled Vertex AI.
+            <a href="https://console.cloud.google.com/projectselector2/home" target="_blank" rel="noopener noreferrer" class="help-link ml-1">Find or create a project</a>
+            <span class="mx-1 text-ink-600">·</span>
+            <a href="https://console.cloud.google.com/marketplace/product/google/aiplatform.googleapis.com" target="_blank" rel="noopener noreferrer" class="help-link">Enable Vertex AI</a>
+          </p>
         </div>
 
         <div class="space-y-2">
-          <label for="vertexBearerToken" class="flex items-center gap-1 text-xs text-ink-400">
-            Vertex AI access token
-            <span role="tooltip" aria-label="Refresh by running gcloud auth print-access-token in your terminal, then paste the token here. Expires after ~60 minutes."
-                  title="Refresh by running &#10;&#10;  gcloud auth print-access-token &#10;&#10;in your terminal, then pasting the token here. Tokens expire after ~60 minutes; you'll see an `access token expired` error card when that happens — just refresh."
-                  class="inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full bg-shell-700 text-[10px] font-semibold text-ink-400 select-none">?</span>
-          </label>
-          <textarea id="vertexBearerToken" class="token w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2 text-xs font-mono min-h-[60px] focus:outline-none focus:ring-2 focus:ring-brand/60"
-                    placeholder="ya29.… (paste output of `gcloud auth print-access-token`)" autocomplete="off"></textarea>
-          <p class="text-[11px] text-ink-500">
-            Run <code class="rounded bg-shell-800 px-1.5 py-0.5 text-[10px]">gcloud auth print-access-token</code>
-            and paste the result. Token lasts ~60 minutes; refresh when you see "access token expired" in a card.
-            Stored in <code class="rounded bg-shell-800 px-1.5 py-0.5 text-[10px]">chrome.storage.local</code>,
-            never sent anywhere except <code class="rounded bg-shell-800 px-1.5 py-0.5 text-[10px]">*.aiplatform.googleapis.com</code>.
+          <label for="vertexBearerToken" class="block text-sm font-medium text-ink-50">Access token</label>
+          <textarea id="vertexBearerToken"
+                    class="token w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2.5 text-xs font-mono min-h-[68px] focus:outline-none focus:ring-2 focus:ring-brand/60"
+                    placeholder="ya29.… (paste the output of `gcloud auth print-access-token`)"
+                    autocomplete="off"></textarea>
+          <p class="text-xs text-ink-400">
+            Run <code class="rounded bg-shell-800 px-1.5 py-0.5 text-[11px] text-ink-100">gcloud auth print-access-token</code> in your terminal, paste the result here. Tokens expire after ~60 minutes — refresh when you see "access token expired" in a card.
+          </p>
+          <p class="text-xs">
+            <a href="https://cloud.google.com/sdk/docs/install" target="_blank" rel="noopener noreferrer" class="help-link">Install gcloud</a>
+            <span class="mx-1 text-ink-600">·</span>
+            <a href="https://cloud.google.com/sdk/gcloud/reference/auth/login" target="_blank" rel="noopener noreferrer" class="help-link">Authenticate gcloud</a>
           </p>
         </div>
 
@@ -107,51 +137,57 @@
                   class="rounded-md border border-shell-700 bg-shell-800 px-3 py-1.5 text-xs text-ink-50 hover:bg-shell-700 focus:outline-none focus:ring-2 focus:ring-brand/60">
             Test connection
           </button>
-          <span id="vertexStatus" class="text-[11px] text-ink-500" aria-live="polite"></span>
+          <span id="vertexStatus" class="text-xs text-ink-400" aria-live="polite"></span>
         </div>
 
         <hr class="border-shell-700/60">
 
         <div class="space-y-2">
-          <label for="geminiStudioKey" class="flex items-center gap-1 text-xs text-ink-400">
-            Google AI Studio API key
-            <span class="text-[10px] text-ink-500">— optional, bypasses Vertex quota for citation + dossier</span>
-            <span role="tooltip" aria-label="When set, citation + dossier calls route through generativelanguage.googleapis.com (Google AI Studio) which has a completely separate quota pool from Vertex AI. Useful when Vertex quotas are still at the new-project default. Get a free key at https://aistudio.google.com/apikey"
-                  title="When set, citation + dossier calls route through generativelanguage.googleapis.com (Google AI Studio) which has a completely separate quota pool from Vertex AI. Useful when Vertex quotas are still at the new-project default. Get a free key at https://aistudio.google.com/apikey"
-                  class="inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full bg-shell-700 text-[10px] font-semibold text-ink-400 select-none">?</span>
+          <label for="geminiStudioKey" class="block text-sm font-medium text-ink-50">
+            Google AI Studio key
+            <span class="ml-2 text-xs font-normal text-ink-500">— optional</span>
           </label>
-          <input type="password" id="geminiStudioKey" placeholder="AIza… (optional)" autocomplete="off"
-                 class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-brand/60">
-          <p class="text-[11px] text-ink-500">
-            Get one free at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" class="text-brand hover:underline">aistudio.google.com/apikey</a>. Leave blank to keep using Vertex for everything.
+          <input type="password" id="geminiStudioKey" placeholder="AIza… (paste your free API key, or leave blank)" autocomplete="off"
+                 class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-brand/60">
+          <p class="text-xs text-ink-400">
+            If your Vertex project has tight quotas, adding a free AI Studio key offloads citation + dossier calls to a separate quota pool. No cost for normal use.
+          </p>
+          <p class="text-xs">
+            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="help-link">Get a free key</a>
           </p>
         </div>
       </fieldset>
 
-      <fieldset id="backend-lmstudio" class="backend-section mt-3 rounded-md border border-shell-700 bg-shell-800/40 p-3 sm:p-4 space-y-4">
+      <!-- LM Studio configuration -->
+      <fieldset id="backend-lmstudio" class="backend-section mt-4 rounded-lg border border-shell-700 bg-shell-850 p-4 sm:p-5 space-y-5">
         <legend class="sr-only">LM Studio configuration</legend>
 
         <div class="space-y-2">
-          <label for="lmEndpoint" class="block text-xs text-ink-400">LM Studio endpoint (default <code class="rounded bg-shell-800 px-1.5 py-0.5 text-[10px]">http://127.0.0.1:1234</code> — change only if you've remapped the port)</label>
+          <label for="lmEndpoint" class="block text-sm font-medium text-ink-50">LM Studio endpoint</label>
           <input type="text" id="lmEndpoint" placeholder="http://127.0.0.1:1234"
-                 class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/60">
+                 class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand/60">
+          <p class="text-xs text-ink-400">
+            Where LM Studio's local server is running. Default is <code class="rounded bg-shell-800 px-1.5 py-0.5 text-[11px] text-ink-100">http://127.0.0.1:1234</code> — only change if you've remapped the port.
+          </p>
+          <p class="text-xs">
+            <a href="https://lmstudio.ai" target="_blank" rel="noopener noreferrer" class="help-link">Download LM Studio</a>
+          </p>
         </div>
 
         <div class="space-y-2">
           <div class="flex items-center gap-3 flex-wrap">
-            <label for="lmModel" class="block text-xs text-ink-400">Local model</label>
+            <label for="lmModel" class="block text-sm font-medium text-ink-50">Model</label>
             <button id="lmDiscover" type="button"
                     class="rounded-md border border-shell-700 bg-shell-800 px-2 py-0.5 text-[11px] text-ink-50 hover:bg-shell-700 focus:outline-none focus:ring-2 focus:ring-brand/60">
-              🔍 Discover
+              🔍 Discover loaded models
             </button>
           </div>
-          <select id="lmModel" class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/60">
-            <option value="gemma-3-12b-it">gemma-3-12b-it</option>
+          <select id="lmModel" class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand/60">
+            <option value="gemma-3-12b-it">gemma-3-12b-it (recommended)</option>
           </select>
-          <p id="lmModelBadge" class="text-[11px] text-ink-500"></p>
-          <p class="text-[11px] text-ink-500">
-            Validated: <code class="rounded bg-shell-800 px-1.5 py-0.5 text-[10px]">gemma-3-12b-it</code>.
-            Other local models (qwen-family, smaller variants) showed format-leak and opener-lock issues in our bench — may underperform on fact-flag mode. Use at your own risk.
+          <p id="lmModelBadge" class="text-xs text-ink-400"></p>
+          <p class="text-xs text-ink-400">
+            Which model LM Studio should run. <code class="rounded bg-shell-800 px-1.5 py-0.5 text-[11px] text-ink-100">gemma-3-12b-it</code> is the best-tested choice for fact-checking.
           </p>
         </div>
 
@@ -160,150 +196,131 @@
                   class="rounded-md border border-shell-700 bg-shell-800 px-3 py-1.5 text-xs text-ink-50 hover:bg-shell-700 focus:outline-none focus:ring-2 focus:ring-brand/60">
             Test connection
           </button>
-          <span id="lmStatus" class="text-[11px] text-ink-500" aria-live="polite"></span>
+          <span id="lmStatus" class="text-xs text-ink-400" aria-live="polite"></span>
         </div>
       </fieldset>
     </section>
 
-    <!-- Mode -->
-    <section aria-labelledby="mode-heading" class="space-y-4">
-      <h2 id="mode-heading" class="text-xs font-semibold uppercase tracking-wider text-ink-400">Mode</h2>
-
-      <div class="space-y-2">
-        <label for="mode" class="block text-xs text-ink-400">What kind of commentary</label>
-        <select id="mode" class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/60">
-          <option value="factflag">Fact-flag (default — questionable claims)</option>
-          <option value="question">Sharp question (partner-grade interruptions)</option>
-          <option value="missing">Missing info (ownership / number / date gaps)</option>
-          <option value="summary">Rolling summary (decisions / topics)</option>
-        </select>
+    <!-- Sidebar behavior -->
+    <section aria-labelledby="mode-heading">
+      <div class="mb-4">
+        <h2 id="mode-heading" class="text-sm font-semibold tracking-tight text-ink-50">Sidebar behavior</h2>
+        <p class="mt-1 text-xs text-ink-400">How the sidebar reacts to what's being said.</p>
       </div>
 
-      <div class="flex items-start gap-3">
-        <input type="checkbox" id="chitchatGate"
-               class="mt-0.5 h-4 w-4 rounded border-shell-700 bg-shell-800 text-brand focus:ring-brand/60 focus:ring-offset-shell-900">
-        <label for="chitchatGate" class="text-xs leading-relaxed text-ink-400">
-          Chitchat gate (skip ad reads, digressions, social filler — doubles Gemini call rate; default off until your Vertex quota approves)
-        </label>
+      <div class="space-y-5 rounded-lg border border-shell-700 bg-shell-850 p-4 sm:p-5">
+        <div class="space-y-2">
+          <label for="mode" class="block text-sm font-medium text-ink-50">What to surface</label>
+          <select id="mode" class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand/60">
+            <option value="factflag">Fact-checks (default)</option>
+            <option value="question">Sharp follow-up questions</option>
+            <option value="missing">Missing context (numbers, dates, ownership)</option>
+            <option value="summary">Rolling summary of decisions and topics</option>
+          </select>
+          <p class="text-xs text-ink-400">Most people stick with fact-checks. The others are useful when you want a different lens on the conversation.</p>
+        </div>
+
+        <div class="flex items-start gap-3 pt-1">
+          <input type="checkbox" id="chitchatGate"
+                 class="mt-0.5 h-4 w-4 rounded border-shell-700 bg-shell-800 text-brand focus:ring-brand/60 focus:ring-offset-shell-900">
+          <label for="chitchatGate" class="text-sm leading-relaxed text-ink-100">
+            Skip small talk
+            <span class="block text-xs text-ink-400 mt-0.5">Filter out ad reads, digressions, and social filler before sending captions for fact-checking. Cleaner cards but uses ~2× more AI calls.</span>
+          </label>
+        </div>
       </div>
     </section>
 
     <!-- Citation sourcing -->
-    <section aria-labelledby="citation-heading" class="space-y-4">
-      <h2 id="citation-heading" class="text-xs font-semibold uppercase tracking-wider text-ink-400">Citation sourcing</h2>
+    <section aria-labelledby="citation-heading">
+      <div class="mb-4">
+        <h2 id="citation-heading" class="text-sm font-semibold tracking-tight text-ink-50">Default citation sources</h2>
+        <p class="mt-1 text-xs text-ink-400">Which outlets the citation finder prefers when attaching sources to fact-check cards.</p>
+      </div>
 
-      <div class="space-y-2">
-        <label for="sourcePref" class="block text-xs text-ink-400">Which kinds of outlets should the citation retriever prefer?</label>
-        <select id="sourcePref" class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/60">
-          <option value="primary">Primary sources only (govt stats, peer-reviewed journals, AP/Reuters, encyclopedias)</option>
+      <div class="space-y-3 rounded-lg border border-shell-700 bg-shell-850 p-4 sm:p-5">
+        <select id="sourcePref" class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand/60">
+          <option value="all">Any reputable source (recommended — highest citation rate)</option>
+          <option value="primary">Primary sources only (government data, peer-reviewed journals, wire services — strict)</option>
           <option value="centrist">Centrist outlets (Reuters, AP, BBC, The Economist, Bloomberg)</option>
-          <option value="left">Left-leaning mainstream (NYT, WaPo, Guardian, NPR, Atlantic, ProPublica)</option>
-          <option value="right">Right-leaning mainstream (WSJ news, National Review, Washington Examiner, Fox News, The Dispatch)</option>
-          <option value="all">Any reputable source (no profile filter)</option>
+          <option value="left">Left-leaning mainstream (NYT, WaPo, Guardian, NPR, Atlantic)</option>
+          <option value="right">Right-leaning mainstream (WSJ news, National Review, Free Press, Fox News reporting)</option>
         </select>
-        <p class="text-[11px] text-ink-500">
-          Steers which links the citation model attaches under each fact-check card. Does NOT affect what gets flagged — the fact-check itself uses the same model and prompt regardless of this preference. Citation grounds via Gemini's Google Search tool on the Vertex backend.
+        <p class="text-xs text-ink-400">
+          This is the default. You can switch on the fly from inside the sidebar — pill toggle (Primary / All) plus a 3-position Left / Centrist / Right slider above the cards. Whichever surface you change, the other syncs.
         </p>
-        <p class="text-[11px] text-ink-500">
-          <span class="text-ink-400 font-medium">Tip:</span> you can also change this from inside the YouTube sidebar — pill toggle (Primary / All) plus a 3-position Left / Centrist / Right slider above the cards. Whichever surface you change, the other syncs.
+        <p class="text-xs text-ink-400">
+          This setting steers which links the citation finder attaches — it doesn't change what gets flagged. Fact-checking itself runs identically regardless.
         </p>
       </div>
     </section>
 
-    <!-- Consensus -->
-    <section aria-labelledby="consensus-heading" class="space-y-4">
-      <h2 id="consensus-heading" class="text-xs font-semibold uppercase tracking-wider text-ink-400">Cross-vendor consensus (high-confidence flags only)</h2>
-
-      <div class="flex items-start gap-3">
-        <input type="checkbox" id="consensusEnabled"
-               class="mt-0.5 h-4 w-4 rounded border-shell-700 bg-shell-800 text-brand focus:ring-brand/60 focus:ring-offset-shell-900">
-        <label for="consensusEnabled" class="text-xs leading-relaxed text-ink-400">
-          Enable consensus check on confidence 4–5 flags
-          <span role="tooltip" aria-label="Fires the enabled voices in parallel when Gemini emits a high-confidence flag (~once per podcast segment). Increases cost on flagged cards but enables the consensus badge — the pitch: no single model decides what's true."
-                title="Fires the enabled voices in parallel when Gemini emits a high-confidence flag (~once per podcast segment). Increases cost on flagged cards but enables the consensus badge — the pitch: no single model decides what's true."
-                class="inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full bg-shell-700 text-[10px] font-semibold text-ink-400 select-none">?</span>
-        </label>
+    <!-- Second-opinion check -->
+    <section aria-labelledby="consensus-heading">
+      <div class="mb-4">
+        <h2 id="consensus-heading" class="text-sm font-semibold tracking-tight text-ink-50">Second-opinion check
+          <span class="ml-1 text-xs font-normal text-ink-500">— optional</span>
+        </h2>
+        <p class="mt-1 text-xs text-ink-400">For high-confidence fact-flags, ask other AI models to weigh in. When 2-of-3 agree, the card gets a "consensus" badge.</p>
       </div>
 
-      <div id="consensus-voices-section" class="opt-voices disabled space-y-2 border-l-2 border-shell-700 pl-4">
-        <div class="flex items-center gap-3">
-          <input type="checkbox" checked disabled class="h-4 w-4 rounded border-shell-700 bg-shell-800">
-          <label class="text-xs text-ink-50">Gemini 2.5 Flash (primary classifier — always on)</label>
-        </div>
-        <div class="flex items-center gap-3">
-          <input type="checkbox" checked disabled class="h-4 w-4 rounded border-shell-700 bg-shell-800">
-          <label class="text-xs text-ink-50">Gemini 2.5 Pro (pre-roll dossier — always on)</label>
-        </div>
-        <div class="flex items-center gap-3">
-          <input type="checkbox" id="voiceLlamaEnabled" class="h-4 w-4 rounded border-shell-700 bg-shell-800 text-brand focus:ring-brand/60 focus:ring-offset-shell-900">
-          <label for="voiceLlamaEnabled" class="text-xs text-ink-50">
-            Llama 4 Maverick (Meta)
-            <span role="tooltip" title="Independent second voice. No reasoning overhead — fastest of the consensus voices."
-                  class="inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full bg-shell-700 text-[10px] font-semibold text-ink-400 select-none">?</span>
+      <div class="space-y-4 rounded-lg border border-shell-700 bg-shell-850 p-4 sm:p-5">
+        <div class="flex items-start gap-3">
+          <input type="checkbox" id="consensusEnabled"
+                 class="mt-0.5 h-4 w-4 rounded border-shell-700 bg-shell-800 text-brand focus:ring-brand/60 focus:ring-offset-shell-900">
+          <label for="consensusEnabled" class="text-sm leading-relaxed text-ink-100">
+            Enable second-opinion check
+            <span class="block text-xs text-ink-400 mt-0.5">Only triggers on high-confidence flags (~once per debate segment). Increases cost on those flagged cards.</span>
           </label>
         </div>
-        <div class="flex items-center gap-3">
-          <input type="checkbox" id="voiceGrokEnabled" class="h-4 w-4 rounded border-shell-700 bg-shell-800 text-brand focus:ring-brand/60 focus:ring-offset-shell-900">
-          <label for="voiceGrokEnabled" class="text-xs text-ink-50">
-            Grok 4.1 Fast Reasoning (xAI)
-            <span role="tooltip" title="Adds ~660 tokens per call due to a vendor system wrapper. Skip if cost-sensitive."
-                  class="inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full bg-shell-700 text-[10px] font-semibold text-ink-400 select-none">?</span>
-          </label>
-        </div>
-        <div class="flex items-center gap-3">
-          <input type="checkbox" id="voiceClaudeEnabled" class="h-4 w-4 rounded border-shell-700 bg-shell-800 text-brand focus:ring-brand/60 focus:ring-offset-shell-900">
-          <label for="voiceClaudeEnabled" class="text-xs text-ink-50">
-            Claude Haiku 4.5 (Anthropic)
-            <span role="tooltip" title="Anthropic on Vertex. Haiku 4.5 is fully enabled at the global endpoint as of 2026-05-21. On rate-limit (429), one retry then silent fallback to other voices."
-                  class="inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full bg-shell-700 text-[10px] font-semibold text-ink-400 select-none">?</span>
-          </label>
+
+        <div id="consensus-voices-section" class="opt-voices disabled space-y-2 border-l-2 border-shell-700 pl-4">
+          <p class="text-xs text-ink-500 mb-2 -mt-1">Always on:</p>
+          <div class="flex items-center gap-3">
+            <input type="checkbox" checked disabled class="h-4 w-4 rounded border-shell-700 bg-shell-800">
+            <label class="text-sm text-ink-50">Google Gemini (primary checker)</label>
+          </div>
+          <p class="text-xs text-ink-500 mt-3 mb-1">Additional voices to consult:</p>
+          <div class="flex items-center gap-3">
+            <input type="checkbox" id="voiceLlamaEnabled" class="h-4 w-4 rounded border-shell-700 bg-shell-800 text-brand focus:ring-brand/60 focus:ring-offset-shell-900">
+            <label for="voiceLlamaEnabled" class="text-sm text-ink-50">Meta Llama</label>
+          </div>
+          <div class="flex items-center gap-3">
+            <input type="checkbox" id="voiceGrokEnabled" class="h-4 w-4 rounded border-shell-700 bg-shell-800 text-brand focus:ring-brand/60 focus:ring-offset-shell-900">
+            <label for="voiceGrokEnabled" class="text-sm text-ink-50">xAI Grok</label>
+          </div>
+          <div class="flex items-center gap-3">
+            <input type="checkbox" id="voiceClaudeEnabled" class="h-4 w-4 rounded border-shell-700 bg-shell-800 text-brand focus:ring-brand/60 focus:ring-offset-shell-900">
+            <label for="voiceClaudeEnabled" class="text-sm text-ink-50">Anthropic Claude</label>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- Affiliate links + sponsored ads (v0.7.0) -->
-    <section aria-labelledby="affiliate-heading" class="space-y-3">
-      <h2 id="affiliate-heading" class="text-xs font-semibold uppercase tracking-wider text-ink-400">Affiliate links <span class="text-ink-500 normal-case font-normal">(opt-out)</span></h2>
-
-      <label class="flex items-start gap-2 text-sm">
-        <input type="checkbox" id="affiliateEnabled"
-               class="mt-0.5 h-4 w-4 rounded border-shell-700 bg-shell-800 text-brand focus:ring-brand/60">
-        <span class="text-xs leading-relaxed text-ink-400">
-          Tag Amazon citation URLs with an Associates tag so this extension can earn a small commission on any book purchased through a fact-check citation. Non-Amazon citations are never tagged. Tagged links show a <code class="rounded bg-shell-800 px-1 text-[10px]">$</code> badge next to them so you can see at a glance which links are affiliate.
-        </span>
-      </label>
-
-      <div class="space-y-1.5">
-        <label for="affiliateTag" class="block text-xs text-ink-400">Affiliate tag <span class="text-ink-500 font-normal">(override — use your own Amazon Associates tag if you have one)</span></label>
-        <input id="affiliateTag" type="text" placeholder="thothintellig-20" autocomplete="off"
-               class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/60">
+    <!-- Domain glossary -->
+    <section aria-labelledby="glossary-heading">
+      <div class="mb-4">
+        <h2 id="glossary-heading" class="text-sm font-semibold tracking-tight text-ink-50">Domain glossary
+          <span class="ml-1 text-xs font-normal text-ink-500">— optional</span>
+        </h2>
+        <p class="mt-1 text-xs text-ink-400">Terms the speakers will use that captions might mishear (proper nouns, jargon, product names).</p>
       </div>
 
-      <div class="space-y-1.5">
-        <label for="adFrequency" class="block text-xs text-ink-400">Sponsored card frequency <span class="text-ink-500 font-normal">(insert a book-recommendation card every N fact-flags; 0 disables)</span></label>
-        <input id="adFrequency" type="number" min="0" max="20" step="1" placeholder="4"
-               class="w-24 rounded-md border border-shell-700 bg-shell-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/60">
+      <div class="rounded-lg border border-shell-700 bg-shell-850 p-4 sm:p-5">
+        <textarea id="glossary" placeholder="comma-separated terms — e.g. quantum entanglement, Cossman, gini coefficient"
+                  class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2.5 text-sm min-h-[80px] focus:outline-none focus:ring-2 focus:ring-brand/60"></textarea>
       </div>
-    </section>
-
-    <!-- Glossary -->
-    <section aria-labelledby="glossary-heading" class="space-y-2">
-      <h2 id="glossary-heading" class="text-xs font-semibold uppercase tracking-wider text-ink-400">Domain glossary <span class="text-ink-500 normal-case font-normal">(optional)</span></h2>
-
-      <label for="glossary" class="block text-xs text-ink-400">Comma-separated terms the speakers use (helps correct STT mishearings)</label>
-      <textarea id="glossary" placeholder="product names, technical jargon, proper nouns"
-                class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2 text-sm min-h-[80px] focus:outline-none focus:ring-2 focus:ring-brand/60"></textarea>
     </section>
 
     <!-- Action bar -->
-    <footer class="flex flex-wrap items-center gap-3 pt-2 border-t border-shell-700">
+    <footer class="flex flex-wrap items-center gap-3 pt-4 border-t border-shell-700">
       <button id="save" type="button"
-              class="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-brand/90 focus:outline-none focus:ring-2 focus:ring-brand/60">
-        Save
+              class="rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-shell-900 hover:bg-brand/90 focus:outline-none focus:ring-2 focus:ring-brand/60">
+        Save settings
       </button>
       <button id="clear" type="button"
-              class="rounded-md border border-shell-700 bg-shell-800 px-4 py-2 text-sm text-ink-50 hover:bg-shell-700 focus:outline-none focus:ring-2 focus:ring-brand/60">
-        Clear token
+              class="rounded-md border border-shell-700 bg-shell-800 px-4 py-2.5 text-sm text-ink-50 hover:bg-shell-700 focus:outline-none focus:ring-2 focus:ring-brand/60">
+        Clear access token
       </button>
       <span id="status" class="text-xs text-good" aria-live="polite"></span>
     </footer>

@@ -89,7 +89,11 @@ async function getSettings() {
         // ratio breaks the budget. User can re-enable in Options when their
         // Vertex quota approves.
         chitchatGate: false,
-        sourcePref: "primary",
+        // v0.7.0: default "all" — primary-only is too restrictive for typical
+        // YouTube content (most claims don't have peer-reviewed sources) and
+        // resulted in mostly empty citation cards. Users can choose primary
+        // via the in-sidebar slider if they want academic rigor.
+        sourcePref: "all",
         consensusEnabled: false,
         voiceLlamaEnabled: false,
         voiceGrokEnabled: false,

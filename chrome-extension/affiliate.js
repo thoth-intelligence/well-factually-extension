@@ -82,63 +82,63 @@
       headline: "How to Lie With Statistics — Darrell Huff",
       tagline: "Classic primer on misleading data. The univariate-vs-multivariate trap is exactly what this book teaches you to spot.",
       url: "https://www.amazon.com/dp/0393310728/",
-      disclosure: "Affiliate link — we may earn a commission if you buy. The classifier doesn't see ad inventory; confidence scores are unaffected."
+      disclosure: "Affiliate link — we may earn a commission if you buy."
     },
     {
       sponsor: "Amazon · Affiliate",
       headline: "The Death of Expertise — Tom Nichols",
       tagline: "Why people increasingly reject experts. Useful frame for high-confidence/contested claims in any heated interview.",
       url: "https://www.amazon.com/dp/0190865978/",
-      disclosure: "Affiliate link — we may earn a commission if you buy. The classifier doesn't see ad inventory; confidence scores are unaffected."
+      disclosure: "Affiliate link — we may earn a commission if you buy."
     },
     {
       sponsor: "Amazon · Affiliate",
       headline: "Calling Bullshit — Carl Bergstrom & Jevin West",
       tagline: "Modern toolkit for spotting data abuse. Companion volume to Huff for the social-media era.",
       url: "https://www.amazon.com/dp/0525509186/",
-      disclosure: "Affiliate link — we may earn a commission if you buy. The classifier doesn't see ad inventory; confidence scores are unaffected."
+      disclosure: "Affiliate link — we may earn a commission if you buy."
     },
     {
       sponsor: "Amazon · Affiliate",
       headline: "Thinking, Fast and Slow — Daniel Kahneman",
       tagline: "The cognitive biases primer. Reading this once changes how you watch any debate.",
       url: "https://www.amazon.com/dp/0374533555/",
-      disclosure: "Affiliate link — we may earn a commission if you buy. The classifier doesn't see ad inventory; confidence scores are unaffected."
+      disclosure: "Affiliate link — we may earn a commission if you buy."
     },
     {
       sponsor: "Amazon · Affiliate",
       headline: "Factfulness — Hans Rosling",
       tagline: "Long-arc data on world progress. Counterweight to media-amplified pessimism without becoming pollyanna.",
       url: "https://www.amazon.com/dp/1250107814/",
-      disclosure: "Affiliate link — we may earn a commission if you buy. The classifier doesn't see ad inventory; confidence scores are unaffected."
+      disclosure: "Affiliate link — we may earn a commission if you buy."
     },
     {
       sponsor: "Amazon · Affiliate",
       headline: "The Demon-Haunted World — Carl Sagan",
       tagline: "Sagan's baloney-detection toolkit. Still the cleanest single statement of the scientific mindset.",
       url: "https://www.amazon.com/dp/0345409469/",
-      disclosure: "Affiliate link — we may earn a commission if you buy. The classifier doesn't see ad inventory; confidence scores are unaffected."
+      disclosure: "Affiliate link — we may earn a commission if you buy."
     },
     {
       sponsor: "Amazon · Affiliate",
       headline: "The Black Swan — Nassim Taleb",
       tagline: "Why your model's confidence is overstated whenever the tail matters. Good antidote to crisp Bayesian intuitions.",
       url: "https://www.amazon.com/dp/0865479186/",
-      disclosure: "Affiliate link — we may earn a commission if you buy. The classifier doesn't see ad inventory; confidence scores are unaffected."
+      disclosure: "Affiliate link — we may earn a commission if you buy."
     },
     {
       sponsor: "Amazon · Affiliate",
       headline: "Predictably Irrational — Dan Ariely",
       tagline: "Behavioral econ for non-economists. Pairs well with Kahneman for a one-two on systematic decision errors.",
       url: "https://www.amazon.com/dp/006124189X/",
-      disclosure: "Affiliate link — we may earn a commission if you buy. The classifier doesn't see ad inventory; confidence scores are unaffected."
+      disclosure: "Affiliate link — we may earn a commission if you buy."
     },
     {
       sponsor: "Amazon · Affiliate",
       headline: "Noise — Daniel Kahneman, Olivier Sibony & Cass Sunstein",
       tagline: "Why expert judgments scatter even when the underlying truth doesn't move. Important read for anyone trusting a single source.",
       url: "https://www.amazon.com/dp/0300251270/",
-      disclosure: "Affiliate link — we may earn a commission if you buy. The classifier doesn't see ad inventory; confidence scores are unaffected."
+      disclosure: "Affiliate link — we may earn a commission if you buy."
     }
   ];
 

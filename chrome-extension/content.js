@@ -36,15 +36,15 @@
          chrome.storage.local under "sourcePref"; background.js reads it
          on every citation call to pick the appropriate source family. -->
     <div class="fcs-bias-mode-row" role="group" aria-label="Source profile">
-      <button type="button" class="fcs-bias-pill" data-mode="primary" aria-pressed="true" title="Peer-reviewed papers, primary government data, original transcripts only. No media outlets.">Primary</button>
-      <button type="button" class="fcs-bias-pill" data-mode="all" aria-pressed="false" title="No source-lean preference — whatever search ranks highest. Mostly Wikipedia.">All</button>
-      <span class="fcs-bias-info" id="fcs-bias-info" title="Primary = peer-reviewed / govt data only. All = no source filter. Or pick Left / Centrist / Right below for media outlets with that political lean.">?</span>
+      <button type="button" class="fcs-bias-pill" data-mode="primary" aria-pressed="false" title="Peer-reviewed papers, primary government data, original transcripts only. No media outlets.">Primary</button>
+      <button type="button" class="fcs-bias-pill" data-mode="all" aria-pressed="true" title="No source-lean preference — whatever search ranks highest. Mostly Wikipedia + mainstream news.">All</button>
+      <span class="fcs-bias-info" id="fcs-bias-info" title="Primary = peer-reviewed / govt data only (strict, often empty). All = any reputable source (recommended). Or pick Left / Centrist / Right below for media outlets with that political lean.">?</span>
     </div>
     <div class="fcs-bias-row fcs-bias-faded" role="group" aria-label="Political bias of citations">
       <span class="fcs-bias-end fcs-bias-end-left" title="Left-leaning publications: NYT, WaPo, Vox, Guardian, Atlantic">Left</span>
       <input type="range" min="-1" max="1" step="1" value="0" id="fcs-bias-slider" class="fcs-bias-slider" aria-label="Political lean: Left, Centrist, Right">
       <span class="fcs-bias-end fcs-bias-end-right" title="Right-leaning publications: WSJ, Reason, National Review, Quillette">Right</span>
-      <span class="fcs-bias-value" id="fcs-bias-value">Primary</span>
+      <span class="fcs-bias-value" id="fcs-bias-value">All</span>
     </div>
     <div class="fcs-body" id="fcs-body">
       <div class="fcs-empty" id="fcs-empty">
@@ -133,7 +133,7 @@
     const badge = document.createElement("span");
     badge.className = "fcs-affiliate-badge";
     badge.textContent = "$";
-    badge.title = "Affiliate link — we may earn a commission if you buy. The classifier doesn't see ad inventory; confidence scores are unaffected.";
+    badge.title = "Affiliate link — we may earn a commission if you buy.";
     badge.setAttribute("aria-label", "Affiliate link");
     return badge;
   }
@@ -895,7 +895,7 @@
   }
 
   function setBiasProfile(profile) {
-    if (!BIAS_PROFILE_LABELS[profile]) profile = "primary";
+    if (!BIAS_PROFILE_LABELS[profile]) profile = "all";
     paintBiasUI(profile);
     try {
       chrome.storage.local.set({ sourcePref: profile });
@@ -916,11 +916,12 @@
       slider.addEventListener("input", onSlide);
       slider.addEventListener("change", onSlide);
     }
-    // Initial paint from persisted setting; defaults to primary.
+    // Initial paint from persisted setting; defaults to "all" (most
+    // permissive — yields citations on the most cards out of the box).
     if (chrome.storage && chrome.storage.local) {
-      chrome.storage.local.get({ sourcePref: "primary" }, (s) => paintBiasUI(s.sourcePref));
+      chrome.storage.local.get({ sourcePref: "all" }, (s) => paintBiasUI(s.sourcePref));
     } else {
-      paintBiasUI("primary");
+      paintBiasUI("all");
     }
   }
   wireBiasUI();

@@ -258,6 +258,31 @@
       </div>
     </section>
 
+    <!-- Affiliate links + sponsored ads (v0.7.0) -->
+    <section aria-labelledby="affiliate-heading" class="space-y-3">
+      <h2 id="affiliate-heading" class="text-xs font-semibold uppercase tracking-wider text-ink-400">Affiliate links <span class="text-ink-500 normal-case font-normal">(opt-out)</span></h2>
+
+      <label class="flex items-start gap-2 text-sm">
+        <input type="checkbox" id="affiliateEnabled"
+               class="mt-0.5 h-4 w-4 rounded border-shell-700 bg-shell-800 text-brand focus:ring-brand/60">
+        <span class="text-xs leading-relaxed text-ink-400">
+          Tag Amazon citation URLs with an Associates tag so this extension can earn a small commission on any book purchased through a fact-check citation. Non-Amazon citations are never tagged. Tagged links show a <code class="rounded bg-shell-800 px-1 text-[10px]">$</code> badge next to them so you can see at a glance which links are affiliate.
+        </span>
+      </label>
+
+      <div class="space-y-1.5">
+        <label for="affiliateTag" class="block text-xs text-ink-400">Affiliate tag <span class="text-ink-500 font-normal">(override — use your own Amazon Associates tag if you have one)</span></label>
+        <input id="affiliateTag" type="text" placeholder="thothintellig-20" autocomplete="off"
+               class="w-full rounded-md border border-shell-700 bg-shell-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/60">
+      </div>
+
+      <div class="space-y-1.5">
+        <label for="adFrequency" class="block text-xs text-ink-400">Sponsored card frequency <span class="text-ink-500 font-normal">(insert a book-recommendation card every N fact-flags; 0 disables)</span></label>
+        <input id="adFrequency" type="number" min="0" max="20" step="1" placeholder="4"
+               class="w-24 rounded-md border border-shell-700 bg-shell-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/60">
+      </div>
+    </section>
+
     <!-- Glossary -->
     <section aria-labelledby="glossary-heading" class="space-y-2">
       <h2 id="glossary-heading" class="text-xs font-semibold uppercase tracking-wider text-ink-400">Domain glossary <span class="text-ink-500 normal-case font-normal">(optional)</span></h2>

@@ -1,10 +1,15 @@
 {
   "name": "live-factcheck-sidebar",
-  "version": "0.5.1",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
-  "description": "Test surface for chrome-extension/ — runs the pure-function unit tests under Node's native test runner. No bundler, no dependencies.",
+  "description": "Chrome MV3 extension — real-time YouTube fact-check sidebar. Bundles + minifies for distribution via esbuild; tests run against unminified source in chrome-extension/.",
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "build:bundle": "node scripts/esbuild.js",
+    "build": "scripts/build.sh"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
   }
 }

@@ -29,6 +29,10 @@ const els = {
   voiceGrokEnabled: document.getElementById("voiceGrokEnabled"),
   voiceClaudeEnabled: document.getElementById("voiceClaudeEnabled"),
   glossary: document.getElementById("glossary"),
+  // v0.7.0: affiliate links + sponsored ad slot config
+  affiliateEnabled: document.getElementById("affiliateEnabled"),
+  affiliateTag: document.getElementById("affiliateTag"),
+  adFrequency: document.getElementById("adFrequency"),
   save: document.getElementById("save"),
   clear: document.getElementById("clear"),
   status: document.getElementById("status"),
@@ -53,6 +57,14 @@ const DEFAULTS = {
   voiceGrokEnabled: false,
   voiceClaudeEnabled: false,
   glossary: "",
+  // v0.7.0 — affiliate defaults. Tagging is opt-out (default ON) because
+  // a single user-installable extension shouldn't ship dark-pattern
+  // monetization, but the disclosure + badge + Options toggle make the
+  // arrangement legible. Default tag is the Thoth Intelligence Associates
+  // ID — override to redirect commissions to your own Associates account.
+  affiliateEnabled: true,
+  affiliateTag: "thothintellig-20",
+  adFrequency: 4,
 };
 
 // Load
@@ -74,6 +86,9 @@ chrome.storage.local.get(DEFAULTS, (s) => {
   els.voiceGrokEnabled.checked = s.voiceGrokEnabled;
   els.voiceClaudeEnabled.checked = s.voiceClaudeEnabled;
   els.glossary.value = s.glossary;
+  if (els.affiliateEnabled) els.affiliateEnabled.checked = s.affiliateEnabled;
+  if (els.affiliateTag) els.affiliateTag.value = s.affiliateTag;
+  if (els.adFrequency) els.adFrequency.value = s.adFrequency;
   refreshBackendSection();
   refreshLmModelBadge();
   refreshConsensusSection();
@@ -237,6 +252,10 @@ els.save.addEventListener("click", () => {
       voiceGrokEnabled: els.voiceGrokEnabled.checked,
       voiceClaudeEnabled: els.voiceClaudeEnabled.checked,
       glossary: els.glossary.value,
+      // v0.7.0 affiliate settings
+      affiliateEnabled: els.affiliateEnabled ? els.affiliateEnabled.checked : DEFAULTS.affiliateEnabled,
+      affiliateTag: (els.affiliateTag && els.affiliateTag.value.trim()) || DEFAULTS.affiliateTag,
+      adFrequency: els.adFrequency ? Math.max(0, parseInt(els.adFrequency.value, 10) || 0) : DEFAULTS.adFrequency,
     },
     () => flash("Saved ✓"),
   );

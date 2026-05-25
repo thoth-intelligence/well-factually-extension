@@ -15,6 +15,11 @@ local-keys.txt
 # Build outputs (we publish the zip via GitHub Releases, not git)
 dist/*.zip
 !dist/.gitkeep
+# esbuild bundle output — regenerated from chrome-extension/ source
+build/
+# package-lock from npm install (we don't commit lockfiles for the
+# minimal dev-only toolchain — esbuild is the only direct dep)
+package-lock.json
 # Backup files
 *.bak
 *~

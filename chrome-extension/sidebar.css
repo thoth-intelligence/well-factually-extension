@@ -352,3 +352,88 @@
   20%  { transform: scale(1.005); box-shadow: 0 0 12px 2px rgba(120, 170, 220, 0.3); }
   100% { transform: scale(1);     box-shadow: 0 0 0 0 rgba(120, 170, 220, 0); }
 }
+
+/* ────────────────────────────────────────────────────────────────────────
+   v0.7.0: Affiliate link badge + sponsored ad card.
+   The badge is a small inline "$" surfaced after a citation link that's
+   been rewritten through the Amazon Associates tag. The ad card is the
+   every-Nth-flag sponsored slot. Schema mirrors assets/replica.css on
+   the marketing site so both surfaces look identical.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.fcs-affiliate-badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 4px;
+  background: rgba(240, 185, 106, 0.18);
+  border: 1px solid rgba(240, 185, 106, 0.45);
+  color: #f0b96a;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 3px;
+  vertical-align: middle;
+  cursor: help;
+  line-height: 1.4;
+}
+.fcs-citation-link.fcs-citation-affiliate::after {
+  /* Suppress the standard ↗ arrow on affiliate links so the $ badge is
+     the only trailing marker — keeps the line readable. */
+  content: "";
+}
+
+.fcs-card.fcs-ad {
+  background: linear-gradient(180deg, #1a1d24 0%, #161920 100%);
+  border: 1px solid #2a2e38;
+  border-left: 3px solid #f0b96a;
+}
+.fcs-card.fcs-ad .fcs-ad-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.fcs-card.fcs-ad .fcs-ad-pill {
+  background: rgba(240, 185, 106, 0.18);
+  color: #f0b96a;
+  border: 1px solid rgba(240, 185, 106, 0.45);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+.fcs-card.fcs-ad .fcs-ad-source {
+  color: #8a93a6;
+  font-weight: 500;
+}
+.fcs-card.fcs-ad .fcs-ad-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+.fcs-card.fcs-ad .fcs-ad-headline {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f0b96a;
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+.fcs-card.fcs-ad .fcs-ad-link:hover .fcs-ad-headline {
+  text-decoration: underline;
+}
+.fcs-card.fcs-ad .fcs-ad-tagline {
+  font-size: 12px;
+  color: #c5cad6;
+  line-height: 1.45;
+}
+.fcs-card.fcs-ad .fcs-ad-footer {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed #262a33;
+  font-size: 10px;
+  color: #6b7280;
+  font-style: italic;
+  line-height: 1.4;
+}

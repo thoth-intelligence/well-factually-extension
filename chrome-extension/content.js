@@ -52,6 +52,7 @@
   $("fcs-clear").addEventListener("click", () => {
     [...body.querySelectorAll(".fcs-card, .fcs-ghost")].forEach((n) => n.remove());
     body.appendChild(empty);
+    cardCountSinceAd = 0;
     safeSend({ type: "RESET" });
   });
   $("fcs-export").addEventListener("click", exportSession);
@@ -68,6 +69,119 @@
   }
 
   function clearEmpty() { if (empty.parentNode) empty.remove(); }
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Affiliate / sponsored ad slot (v0.7.0)
+  //
+  // Reads three settings from chrome.storage.local with safe defaults:
+  //   affiliateEnabled  (bool, default true)   — tag amazon.com citation URLs
+  //   affiliateTag      (str, default "thothintellig-20")
+  //   adFrequency       (int, default 4)       — show sponsored card every N
+  //                                              cards. 0 disables.
+  //
+  // The tag rewriter + ad inventory live in affiliate.js (loaded before this
+  // script via manifest content_scripts). Access them via
+  // globalThis.__fcsAffiliate so this file stays a classic, non-module
+  // content script.
+  // ───────────────────────────────────────────────────────────────────────
+  const __aff = globalThis.__fcsAffiliate;
+  const affiliateSettings = {
+    enabled: true,
+    tag: __aff ? __aff.DEFAULT_AFFILIATE_TAG : "thothintellig-20",
+    adFrequency: 4
+  };
+  let cardCountSinceAd = 0;
+  let adsShown = 0;
+
+  function loadAffiliateSettings() {
+    if (!chrome || !chrome.storage || !chrome.storage.local) return;
+    chrome.storage.local.get(
+      {
+        affiliateEnabled: true,
+        affiliateTag: __aff ? __aff.DEFAULT_AFFILIATE_TAG : "thothintellig-20",
+        adFrequency: 4
+      },
+      (s) => {
+        affiliateSettings.enabled = !!s.affiliateEnabled;
+        affiliateSettings.tag = (typeof s.affiliateTag === "string" && s.affiliateTag.trim()) || (__aff ? __aff.DEFAULT_AFFILIATE_TAG : "thothintellig-20");
+        const f = parseInt(s.adFrequency, 10);
+        affiliateSettings.adFrequency = (Number.isFinite(f) && f >= 0) ? f : 4;
+      }
+    );
+  }
+  loadAffiliateSettings();
+  // Affiliate badge — small inline "$" marker shown next to a rewritten
+  // citation link. Hover tooltip explains the disclosure. Kept on a single
+  // shared className so the CSS scoping in sidebar.css handles styling.
+  function buildAffiliateBadge() {
+    const badge = document.createElement("span");
+    badge.className = "fcs-affiliate-badge";
+    badge.textContent = "$";
+    badge.title = "Affiliate link — we may earn a commission if you buy. The classifier doesn't see ad inventory; confidence scores are unaffected.";
+    badge.setAttribute("aria-label", "Affiliate link");
+    return badge;
+  }
+
+  // buildAdCard — renders a single sponsored card identical in DOM shape to
+  // the website's demo ad row (see assets/replica.css `.fcs-ad`). Anchor
+  // gets `rel="sponsored noopener noreferrer"` per FTC + Chrome best
+  // practice. Visible badge in the head pill so users see it's an ad even
+  // before reading.
+  function buildAdCard(ad) {
+    const card = document.createElement("div");
+    card.className = "fcs-card fcs-ad";
+    const head = document.createElement("div");
+    head.className = "fcs-ad-head";
+    const pill = document.createElement("span");
+    pill.className = "fcs-ad-pill";
+    pill.textContent = "SPONSORED";
+    const source = document.createElement("span");
+    source.className = "fcs-ad-source";
+    source.textContent = ad.sponsor || "";
+    head.appendChild(pill);
+    head.appendChild(source);
+    const link = document.createElement("a");
+    link.className = "fcs-ad-link";
+    link.href = ad.url;
+    link.target = "_blank";
+    link.rel = "sponsored noopener noreferrer";
+    const headline = document.createElement("div");
+    headline.className = "fcs-ad-headline";
+    headline.textContent = ad.headline || "";
+    link.appendChild(headline);
+    if (ad.tagline) {
+      const tagline = document.createElement("div");
+      tagline.className = "fcs-ad-tagline";
+      tagline.textContent = ad.tagline;
+      link.appendChild(tagline);
+    }
+    const footer = document.createElement("div");
+    footer.className = "fcs-ad-footer";
+    footer.textContent = ad.disclosure || "Affiliate link — we may earn a small commission if you buy.";
+    card.appendChild(head);
+    card.appendChild(link);
+    card.appendChild(footer);
+    return card;
+  }
+
+  // maybeSlotAd — called after every successful fact-card render. When the
+  // running counter crosses the configured frequency, append a sponsored
+  // card AFTER the just-added card and reset the counter. adFrequency=0
+  // disables ads entirely.
+  function maybeSlotAd() {
+    if (!__aff || typeof __aff.pickAd !== "function") return;
+    if (!affiliateSettings.enabled) return;
+    const N = affiliateSettings.adFrequency;
+    if (!N || N <= 0) return;
+    cardCountSinceAd++;
+    if (cardCountSinceAd < N) return;
+    cardCountSinceAd = 0;
+    const ad = __aff.pickAd(adsShown, affiliateSettings.tag);
+    adsShown++;
+    if (!ad) return;
+    body.appendChild(buildAdCard(ad));
+    body.scrollTop = body.scrollHeight;
+  }
 
   // safeSend — wrap chrome.runtime.sendMessage so an orphaned content script
   // (extension reloaded mid-session, leaving this script's runtime invalid)
@@ -422,6 +536,10 @@
     }
     body.appendChild(card);
     body.scrollTop = body.scrollHeight;
+    // Slot in a sponsored card every Nth fact-flag. Errors don't count
+    // (they aren't real classifications), but real cards do regardless of
+    // confidence. See affiliate.js + sidebar.css for the ad-card schema.
+    if (!error) maybeSlotAd();
   }
 
   // attachCitation — called when background.js delivers a citation for a card
@@ -441,15 +559,29 @@
     const card = body.querySelector(`.fcs-card[data-cue="${String(cue)}"]`);
     if (!card) return;
     if (card.querySelector(".fcs-citation")) return; // already attached
+    // v0.7.0: if affiliate tagging is enabled and the citation happens to
+    // point at an Amazon storefront, rewrite the URL with our Associates
+    // tag and surface a visible "$" badge so users can see at a glance
+    // which links earn commission. Non-Amazon URLs pass through untouched.
+    let renderUrl = citation.url;
+    let isAffiliate = false;
+    if (affiliateSettings.enabled && __aff && typeof __aff.tagAffiliateUrl === "function") {
+      const tagged = __aff.tagAffiliateUrl(citation.url, affiliateSettings.tag);
+      renderUrl = tagged.url;
+      isAffiliate = tagged.isAffiliate;
+    }
     const wrap = document.createElement("div");
     wrap.className = "fcs-citation";
     const link = document.createElement("a");
-    link.href = citation.url;
+    link.href = renderUrl;
     link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    link.className = "fcs-citation-link";
+    // rel=sponsored signals affiliate to crawlers + complies with FTC
+    // disclosure guidance. Non-affiliate links stay with the original rel.
+    link.rel = isAffiliate ? "sponsored noopener noreferrer" : "noopener noreferrer";
+    link.className = "fcs-citation-link" + (isAffiliate ? " fcs-citation-affiliate" : "");
     link.textContent = citation.title || hostname;
     wrap.appendChild(link);
+    if (isAffiliate) wrap.appendChild(buildAffiliateBadge());
     if (citation.excerpt) {
       const ex = document.createElement("div");
       ex.className = "fcs-citation-excerpt";
@@ -714,6 +846,9 @@
     if (changes.mode || changes.backend || changes.gcpProjectId || changes.vertexBearerToken || changes.lmModel) {
       refreshModeTag();
     }
+    if (changes.affiliateEnabled || changes.affiliateTag || changes.adFrequency) {
+      loadAffiliateSettings();
+    }
   });
 
   // On navigation within YouTube SPA (clicking another video), reset state.
@@ -727,6 +862,7 @@
       lastUrl = location.href;
       lastSentText = "";
       currentEpoch++;
+      cardCountSinceAd = 0;
       [...body.querySelectorAll(".fcs-card, .fcs-ghost")].forEach((n) => n.remove());
       body.appendChild(empty);
       setStatus("new video — waiting for captions…");

@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Live Fact-Check Sidebar",
+  "name": "Well (f)actually Youtube Sidebar",
   "version": "0.7.0",
   "description": "Streams live fact-flags alongside YouTube videos via Vertex AI (Gemini Flash primary, optional Llama/Grok/Claude consensus) with optional Google AI Studio fallback for the citation + dossier paths. Local LM Studio backend also supported. v0.7 adds Amazon Associates citation tagging + sponsored book-recommendation cards (both opt-out in Options).",
   "permissions": ["storage", "alarms"],
@@ -29,7 +29,7 @@
     }
   ],
   "action": {
-    "default_title": "Live Fact-Check Sidebar"
+    "default_title": "Well (f)actually Youtube Sidebar"
   },
   "options_ui": {
     "page": "options.html",

@@ -5,48 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Well, Factually — Settings</title>
   <!--
-    Tailwind via Play CDN. Note for MV3 packaging: the Play CDN uses runtime
-    JS scanning + eval, which Chrome's strict extension_pages CSP blocks. For
-    the extension to actually load Tailwind from a CDN, ship a precompiled
-    bundle locally (e.g. `tailwind.min.css`) and `<link>` it. The CDN script
-    below renders correctly in any browser opened via file:// or http(s)://.
+    Tailwind, precompiled to a local stylesheet. MV3's extension_pages CSP
+    (script-src 'self') blocks the Play CDN (remote script + runtime eval),
+    so we ship a static build instead. Regenerate after changing utility
+    classes here:
+      npx tailwindcss@3 -c tailwind.config.cjs -i tailwind.input.css \
+        -o options.css --minify
+    The theme tokens (ink/shell/brand colors, fonts) live in tailwind.config.cjs.
   -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['-apple-system', 'BlinkMacSystemFont', 'Inter', 'system-ui', 'sans-serif'],
-            mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
-          },
-          colors: {
-            ink: {
-              50: '#e6e8ee',
-              100: '#c8ccd6',
-              200: '#a8aebd',
-              400: '#8a93a6',
-              500: '#525968',
-              600: '#3a3f4a',
-            },
-            shell: {
-              900: '#0e0f12',
-              850: '#13151a',
-              800: '#1c1f26',
-              750: '#22262e',
-              700: '#262a33',
-              600: '#2c313c',
-            },
-            brand: '#f0b96a',
-            'brand-dim': '#a87f3f',
-            good: '#6cd28d',
-            warn: '#f0b96a',
-            danger: '#e57373',
-          },
-        },
-      },
-    };
-  </script>
+  <link rel="stylesheet" href="options.css">
   <style>
     /* Token masking — visible only on blur. */
     textarea.token { -webkit-text-security: disc; }

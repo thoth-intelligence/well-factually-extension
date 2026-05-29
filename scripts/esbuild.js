@@ -107,6 +107,7 @@ await Promise.all([
 const ASSETS = [
   "manifest.json",
   "options.html",
+  "options.css",
   "sidebar.css",
   "README.md",
 ];

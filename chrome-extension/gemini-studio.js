@@ -23,8 +23,10 @@ const STUDIO_HOST = "https://generativelanguage.googleapis.com";
 // without the `google/` vendor prefix that Vertex's OpenAI-compat surface
 // expects.
 const STUDIO_MODEL_FOR_ROLE = {
-  citation: "gemini-2.5-flash",
-  dossier:  "gemini-2.5-pro",
+  classifier: "gemini-2.5-flash",
+  chitchat:   "gemini-2.5-flash",
+  citation:   "gemini-2.5-flash",
+  dossier:    "gemini-2.5-pro",
 };
 
 async function getStudioKey() {
@@ -74,15 +76,32 @@ export async function callGeminiStudioSearch(role, systemPrompt, userPrompt, opt
     body: JSON.stringify(body),
   };
   if (signal) fetchOpts.signal = signal;
-  const resp = await fetch(url, fetchOpts);
-  if (!resp.ok) {
+
+  // Transient-error retry: Studio 503 ("model is currently experiencing high
+  // demand") and 429 (rate) are usually momentary spikes. Retry a couple of
+  // times with backoff before surfacing an error card, so a brief capacity
+  // blip doesn't interrupt the stream. Bounded by the caller's AbortSignal /
+  // PRIMARY_TIMEOUT_MS — if that fires, fetch throws AbortError and we stop.
+  // Other statuses (400/403/etc.) are permanent and fail immediately.
+  const BACKOFF_MS = [400, 1000];
+  let lastErr;
+  for (let attempt = 0; attempt <= BACKOFF_MS.length; attempt++) {
+    const resp = await fetch(url, fetchOpts);
+    if (resp.ok) return await resp.json();
     const truncated = (await resp.text()).slice(0, 300);
     if (resp.status === 400) throw new Error(`Studio 400 — bad API key or malformed request. (${truncated})`);
     if (resp.status === 403) throw new Error(`Studio 403 — API key lacks Gemini access. (${truncated})`);
-    if (resp.status === 429) throw new Error(`Studio HTTP 429: ${truncated}`);
+    if (resp.status === 429 || resp.status === 503) {
+      lastErr = new Error(`Studio HTTP ${resp.status}: ${truncated}`);
+      if (attempt < BACKOFF_MS.length) {
+        await new Promise((r) => setTimeout(r, BACKOFF_MS[attempt]));
+        continue;
+      }
+      throw lastErr;
+    }
     throw new Error(`Studio ${role} HTTP ${resp.status}: ${truncated}`);
   }
-  return await resp.json();
+  throw lastErr;
 }
 
 // callGeminiStudioPlain — for the dossier role which doesn't use grounding.

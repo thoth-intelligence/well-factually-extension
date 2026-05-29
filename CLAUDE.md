@@ -89,6 +89,34 @@ gh release create v<version> \
   --generate-notes
 ```
 
+## Verification workflow (do this proactively — no asking)
+
+After ANY change observable in the browser — extension Options page edits, sidebar.css changes, content.js DOM injection, manifest version bumps — verify it works end-to-end via the Claude in Chrome MCP (`mcp__Claude_in_Chrome__*`) BEFORE reporting "done" to the user. The user has multiple parallel projects and shouldn't be the one driving smoke tests.
+
+**Trigger this for**:
+- Every change to `chrome-extension/options.html` or `chrome-extension/options.js` (Options page)
+- Every change to `chrome-extension/content.js`, `sidebar.css`, `affiliate.js` (sidebar UI)
+- Every new release zip cut via `scripts/build.sh`
+- Manifest version bumps + new permissions
+
+**Workflow**:
+1. `mcp__Claude_in_Chrome__tabs_context_mcp` (createIfEmpty: true)
+2. Have the user reload the unpacked extension if the change is in source — extensions don't hot-reload like web pages. Or for release zips, ask the user to unzip + Load unpacked first.
+3. For Options page: `navigate` to `chrome-extension://<extension-id>/options.html`. The extension id is visible at `chrome://extensions` once loaded.
+4. For sidebar UI: `navigate` to a YouTube watch page (`https://www.youtube.com/watch?v=aMcjxSThD54` is the contest demo clip).
+5. `computer screenshot` with `save_to_disk: true`
+6. Verify visually + drive interactions: toggle the bias slider, click pills, fill the Pro license field, click Verify (test license `cus_test_xxx` will return pro:false from /api/license-check — that's expected and confirms the round-trip).
+7. Open DevTools console to check for errors: `key cmd+opt+j`.
+8. Report findings inline with screenshot path.
+
+**Hard stops — STOP, screenshot, ask user instead**:
+- Pasting actual Vertex AI bearer tokens, Google AI Studio API keys, or Anthropic/xAI/Meta API keys (user enters their own)
+- Stripe Dashboard (`dashboard.stripe.com`) — blocked by safety classifier
+- Real Pro subscription purchase — user has to enter their own card on the website's Stripe Checkout
+- Account creation, password fields
+
+For the Pro license flow specifically: drive up to clicking the Verify button with whatever code is in the field. If you need a real `cus_xxx`, ask the user to paste theirs (they got it from their `/success?session_id=…` page).
+
 ## Known open work
 
 - **v9.5.1**: layer `chrome.identity` OAuth on top of `vertex.js` `getAccessToken()` so the access token refreshes automatically; live Vertex-token validation on Save (still partially open — Options has a Test connection button but no auto-check); `m.youtube.com/watch*` and `/shorts/*` manifest patches (two of the four v9 smoke-test bugs); copy-as-quote + share buttons on each card.

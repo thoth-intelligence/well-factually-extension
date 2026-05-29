@@ -20,6 +20,14 @@ const els = {
   lmDiscover: document.getElementById("lmDiscover"),
   lmTest: document.getElementById("lmTest"),
   lmStatus: document.getElementById("lmStatus"),
+  // v0.8.0 first-run setup wizard (Free tier).
+  lmWizardDetect: document.getElementById("lmWizardDetect"),
+  lmWizardStatus: document.getElementById("lmWizardStatus"),
+  lmWizardOverall: document.getElementById("lmWizardOverall"),
+  lmStep1: document.getElementById("lmStep1"),
+  lmStep2: document.getElementById("lmStep2"),
+  lmStep3: document.getElementById("lmStep3"),
+  lmStep4: document.getElementById("lmStep4"),
   mode: document.getElementById("mode"),
   chitchatGate: document.getElementById("chitchatGate"),
   sourcePref: document.getElementById("sourcePref"),
@@ -320,22 +328,65 @@ els.vertexTest.addEventListener("click", async () => {
   }
 });
 
+// --- LM Studio probes -------------------------------------------------------
+// Extracted into pure-ish helpers so the first-run wizard (els.lmWizardDetect)
+// can reuse the EXACT same logic the manual Discover/Test buttons use, without
+// duplicating the fetch/parse code. Each returns a structured result; the
+// click handlers + wizard render it differently.
+
+function lmEndpointValue() {
+  return (els.lmEndpoint.value || DEFAULTS.lmEndpoint).replace(/\/$/, "");
+}
+
+// GET /v1/models — list loaded model ids. Populates the model <select> and
+// auto-selects a Gemma model when present (falls back to gemma-3-12b-it).
+async function lmDiscoverModels() {
+  const endpoint = lmEndpointValue();
+  const r = await fetch(endpoint + "/v1/models", { method: "GET" });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const d = await r.json();
+  const ids = (d.data || []).map((m) => m.id).filter(Boolean);
+  if (!ids.length) throw new Error("no models found");
+  const current = els.lmModel.value;
+  els.lmModel.innerHTML = "";
+  for (const id of ids) els.lmModel.add(new Option(id, id));
+  // Prefer keeping the user's current pick; else snap to any Gemma; else first.
+  const gemma = ids.find((id) => /gemma/i.test(id));
+  if (ids.includes(current)) els.lmModel.value = current;
+  else if (gemma) els.lmModel.value = gemma;
+  else if (ids.includes("gemma-3-12b-it")) els.lmModel.value = "gemma-3-12b-it";
+  refreshLmModelBadge();
+  return { ids, selected: els.lmModel.value, hasGemma: !!gemma };
+}
+
+// POST a 3-token chat completion against the selected model — proves the
+// server can actually run inference, not just that the port is open.
+async function lmTestChat() {
+  const endpoint = lmEndpointValue();
+  const model = els.lmModel.value;
+  const t0 = Date.now();
+  const r = await fetch(endpoint + "/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: "user", content: "Reply with ONLY the word: ok" }],
+      max_tokens: 8,
+      temperature: 0.0,
+    }),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const d = await r.json();
+  const txt = (d.choices?.[0]?.message?.content || "").trim();
+  const dt = ((Date.now() - t0) / 1000).toFixed(1);
+  return { txt, dt, model };
+}
+
 els.lmDiscover.addEventListener("click", async () => {
-  const endpoint = (els.lmEndpoint.value || DEFAULTS.lmEndpoint).replace(/\/$/, "");
   els.lmStatus.textContent = "discovering…";
   els.lmStatus.classList.remove("err");
   try {
-    const r = await fetch(endpoint + "/v1/models", { method: "GET" });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const d = await r.json();
-    const ids = (d.data || []).map(m => m.id).filter(Boolean);
-    if (!ids.length) throw new Error("no models found");
-    const current = els.lmModel.value;
-    els.lmModel.innerHTML = "";
-    for (const id of ids) els.lmModel.add(new Option(id, id));
-    if (ids.includes(current)) els.lmModel.value = current;
-    else if (ids.includes("gemma-3-12b-it")) els.lmModel.value = "gemma-3-12b-it";
-    refreshLmModelBadge();
+    const { ids } = await lmDiscoverModels();
     els.lmStatus.textContent = `✓ found ${ids.length} models`;
   } catch (e) {
     els.lmStatus.textContent = `✕ ${e.message}`;
@@ -344,32 +395,100 @@ els.lmDiscover.addEventListener("click", async () => {
 });
 
 els.lmTest.addEventListener("click", async () => {
-  const endpoint = (els.lmEndpoint.value || DEFAULTS.lmEndpoint).replace(/\/$/, "");
-  const model = els.lmModel.value;
   els.lmStatus.textContent = "testing…";
   els.lmStatus.classList.remove("err");
-  const t0 = Date.now();
   try {
-    const r = await fetch(endpoint + "/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: "user", content: "Reply with ONLY the word: ok" }],
-        max_tokens: 8,
-        temperature: 0.0,
-      }),
-    });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const d = await r.json();
-    const txt = (d.choices?.[0]?.message?.content || "").trim();
-    const dt = ((Date.now() - t0) / 1000).toFixed(1);
+    const { txt, dt } = await lmTestChat();
     els.lmStatus.textContent = `✓ reachable, ${dt}s — replied: "${txt.slice(0, 30)}"`;
   } catch (e) {
     els.lmStatus.textContent = `✕ ${e.message} — is LM Studio's server started on this port?`;
     els.lmStatus.classList.add("err");
   }
 });
+
+// --- First-run setup wizard -------------------------------------------------
+// Step 4 ("Detect & connect") is the live magic: it runs lmDiscoverModels()
+// then lmTestChat() against the local server, turning steps GREEN as each
+// passes. It also auto-fills the endpoint (defaults), auto-selects the
+// detected model, switches the backend to LM Studio, and confirms Gemma is
+// what's loaded. On failure it shows an actionable red state.
+//
+// HONESTY NOTE: nothing here installs LM Studio or downloads a model — that's
+// impossible from a browser extension. Steps 1–3 are guided instructions with
+// real links; only step 4 is automated, and only to DETECT + WIRE UP what the
+// user has already installed and started.
+
+function setStepState(el, state) {
+  if (el) el.dataset.state = state;
+}
+
+function markStaticStepsDone() {
+  // If detection succeeds, the prerequisite steps (install / download / start)
+  // must have been completed — reflect that visually.
+  setStepState(els.lmStep1, "done");
+  setStepState(els.lmStep2, "done");
+  setStepState(els.lmStep3, "done");
+}
+
+if (els.lmWizardDetect) {
+  els.lmWizardDetect.addEventListener("click", async () => {
+    // Ensure we're configured for the local backend before/while detecting.
+    if (els.backend && els.backend.value !== "lmstudio") {
+      els.backend.value = "lmstudio";
+      refreshBackendSection();
+    }
+    // Default the endpoint if blank, so users don't have to type it.
+    if (els.lmEndpoint && !els.lmEndpoint.value.trim()) {
+      els.lmEndpoint.value = DEFAULTS.lmEndpoint;
+    }
+
+    setStepState(els.lmStep4, "active");
+    els.lmWizardStatus.textContent = "Detecting LM Studio…";
+    els.lmWizardStatus.className = "text-xs text-ink-400";
+    els.lmWizardOverall.textContent = "Detecting…";
+    els.lmWizardOverall.className = "text-xs text-ink-400";
+
+    let discovered;
+    try {
+      discovered = await lmDiscoverModels();
+    } catch (e) {
+      setStepState(els.lmStep4, "error");
+      els.lmWizardStatus.textContent = "✕ LM Studio not detected — is the server started on port 1234? (Step 3)";
+      els.lmWizardStatus.className = "text-xs text-warn";
+      els.lmWizardOverall.textContent = "Not connected";
+      els.lmWizardOverall.className = "text-xs text-warn";
+      return;
+    }
+
+    els.lmWizardStatus.textContent = `Found ${discovered.ids.length} model(s) — running a live test…`;
+
+    let tested;
+    try {
+      tested = await lmTestChat();
+    } catch (e) {
+      setStepState(els.lmStep4, "error");
+      els.lmWizardStatus.textContent = `✕ Server reachable but the model didn't respond (${e.message}). Make sure a model is loaded in the Local Server tab.`;
+      els.lmWizardStatus.className = "text-xs text-warn";
+      els.lmWizardOverall.textContent = "Model not responding";
+      els.lmWizardOverall.className = "text-xs text-warn";
+      return;
+    }
+
+    // Success — everything's wired up.
+    markStaticStepsDone();
+    setStepState(els.lmStep4, "done");
+    const gemmaNote = discovered.hasGemma
+      ? `Gemma detected (${tested.model}).`
+      : `Connected to ${tested.model} — for the free tier we recommend Gemma 4 E4B (Step 2).`;
+    els.lmWizardStatus.innerHTML = `✓ Connected in ${tested.dt}s. ${gemmaNote} Click <strong>Save settings</strong> below to finish.`;
+    els.lmWizardStatus.className = discovered.hasGemma ? "text-xs text-good" : "text-xs text-warn";
+    els.lmWizardOverall.textContent = "✓ Connected";
+    els.lmWizardOverall.className = "text-xs text-good";
+    // Mirror the result into the manual status line too, for consistency.
+    els.lmStatus.textContent = `✓ reachable, ${tested.dt}s — replied: "${tested.txt.slice(0, 30)}"`;
+    els.lmStatus.classList.remove("err");
+  });
+}
 
 els.save.addEventListener("click", () => {
   const projectId = els.gcpProjectId.value.trim();

@@ -44,6 +44,14 @@
     }
     .help-link:hover { color: #f0b96a; border-color: #f0b96a; }
     .help-link::after { content: " ↗"; opacity: 0.7; }
+
+    /* v0.8.0 setup wizard — per-step state colors driven by data-state, set
+       by options.js as detection progresses. */
+    .lm-step[data-state="done"] { border-color: rgba(74,222,128,0.5); }
+    .lm-step[data-state="done"] .lm-step-badge { background: #16a34a; color: #fff; }
+    .lm-step[data-state="error"] { border-color: rgba(248,113,113,0.6); }
+    .lm-step[data-state="error"] .lm-step-badge { background: #dc2626; color: #fff; }
+    .lm-step[data-state="active"] .lm-step-badge { background: #f0b96a; color: #1a1d24; }
   </style>
 </head>
 <body class="min-h-screen bg-shell-900 text-ink-50 font-sans antialiased">
@@ -150,26 +158,79 @@
       <fieldset id="backend-lmstudio" class="backend-section mt-4 rounded-lg border border-shell-700 bg-shell-850 p-4 sm:p-5 space-y-5">
         <legend class="sr-only">LM Studio configuration</legend>
 
-        <!-- v0.8.0 Free-tier onboarding: how to get a local model running.
-             Mirrors the website's #free-setup guide. Screenshot placeholders
-             are intentionally text-only here (Options is a settings page,
-             not a tutorial) — full visuals live on the website guide. -->
-        <details class="rounded-md border border-shell-700 bg-shell-800/60 p-3">
-          <summary class="cursor-pointer text-sm font-medium text-ink-50">First time? Set up a local model (free tier) ↓</summary>
-          <ol class="mt-3 space-y-2 text-xs text-ink-300 list-decimal list-inside">
-            <li>Install <a href="https://lmstudio.ai" target="_blank" rel="noopener noreferrer" class="help-link">LM Studio</a> (free; Mac / Windows / Linux).</li>
-            <li>In LM Studio's Search tab, download a model:
-              <ul class="mt-1 ml-4 list-disc space-y-1">
-                <li><span class="font-mono text-ink-100">Gemma 4 E4B</span> — lightweight default, runs on ~8GB RAM. Recommended starting point.</li>
-                <li><span class="font-mono text-ink-100">Qwen2.5-7B-Instruct</span> or <span class="font-mono text-ink-100">Llama-3.1-8B-Instruct</span> — stronger, for ≥16GB RAM / a GPU.</li>
-              </ul>
+        <!-- v0.8.0 Free-tier onboarding wizard. Replaces the old passive
+             <details> block with a prominent sequential Step 1..4 walkthrough.
+             Step 3 ("Detect & connect") is LIVE: it reuses the existing
+             lmDiscover/lmTest logic (no duplication — the wizard buttons below
+             delegate to els.lmDiscover.click() / els.lmTest.click() and read
+             back the result) to auto-fill the endpoint, auto-select the
+             detected model, and turn the step GREEN when LM Studio is reachable
+             AND a Gemma model is loaded.
+
+             HONESTY: this is a GUIDED + AUTO-DETECTING flow, NOT an installer.
+             A browser extension cannot install LM Studio or download a model
+             for the user — those are desktop actions the user performs. The
+             wizard links out, explains each step, then verifies the result. -->
+        <section id="lmWizard" class="rounded-lg border border-brand/40 bg-shell-800/60 p-4 sm:p-5">
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <h3 class="text-sm font-semibold text-ink-50">⚡ Set up local fact-checking (Free)</h3>
+            <span id="lmWizardOverall" class="text-xs text-ink-400" aria-live="polite">Not connected yet</span>
+          </div>
+          <p class="mt-1 text-xs text-ink-400">Four steps. We can't install desktop software for you, but we'll auto-detect once LM Studio is running and wire everything up.</p>
+
+          <ol class="mt-4 space-y-4">
+            <!-- Step 1 — install LM Studio -->
+            <li id="lmStep1" class="lm-step flex gap-3 rounded-md border border-shell-700 bg-shell-850 p-3" data-state="todo">
+              <span class="lm-step-badge flex-none flex h-7 w-7 items-center justify-center rounded-full bg-shell-700 text-ink-50 text-xs font-semibold">1</span>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-medium text-ink-50">Install LM Studio</p>
+                <p class="mt-1 text-xs text-ink-400">Free desktop app for Mac, Windows, and Linux. Download, install, and open it like any other app.</p>
+                <p class="mt-2 text-xs">
+                  <a href="https://lmstudio.ai" target="_blank" rel="noopener noreferrer" class="help-link">Download LM Studio</a>
+                </p>
+                <!-- SCREENSHOT PLACEHOLDER: optional inline LM Studio download shot — canonical visuals live on the website guide (/assets/lmstudio-download.png). -->
+              </div>
             </li>
-            <li>Open LM Studio's <em>Local Server</em> tab, select the model, click <strong>Start Server</strong> (defaults to port 1234).</li>
-            <li>Back here: leave the endpoint below as-is, click <em>Discover loaded models</em>, pick your model, then <em>Test connection</em>.</li>
+
+            <!-- Step 2 — download Gemma 4 E4B -->
+            <li id="lmStep2" class="lm-step flex gap-3 rounded-md border border-shell-700 bg-shell-850 p-3" data-state="todo">
+              <span class="lm-step-badge flex-none flex h-7 w-7 items-center justify-center rounded-full bg-shell-700 text-ink-50 text-xs font-semibold">2</span>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-medium text-ink-50">Download <span class="font-mono">Gemma 4 E4B</span></p>
+                <p class="mt-1 text-xs text-ink-400">In LM Studio open the <em>Discover</em> tab (magnifying glass), search <span class="font-mono text-ink-100">Gemma 4 E4B</span>, and download it. It's lightweight (~8GB RAM) and the recommended free-tier model.</p>
+                <p class="mt-1 text-xs text-ink-500">Stronger machines (≥16GB RAM / a GPU) can use <span class="font-mono">Qwen2.5-7B-Instruct</span> or <span class="font-mono">Llama-3.1-8B-Instruct</span> instead.</p>
+                <!-- SCREENSHOT PLACEHOLDER: LM Studio Discover search for Gemma 4 E4B — /assets/lmstudio-model-search.png (canonical visual on website). -->
+              </div>
+            </li>
+
+            <!-- Step 3 — start the local server -->
+            <li id="lmStep3" class="lm-step flex gap-3 rounded-md border border-shell-700 bg-shell-850 p-3" data-state="todo">
+              <span class="lm-step-badge flex-none flex h-7 w-7 items-center justify-center rounded-full bg-shell-700 text-ink-50 text-xs font-semibold">3</span>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-medium text-ink-50">Start LM Studio's local server</p>
+                <p class="mt-1 text-xs text-ink-400">Open the <em>Developer</em> / <em>Local Server</em> tab, load your Gemma model, and click <strong>Start Server</strong>. It listens on <code class="rounded bg-shell-800 px-1.5 py-0.5 text-[11px] text-ink-100">http://127.0.0.1:1234</code> by default.</p>
+                <!-- SCREENSHOT PLACEHOLDER: LM Studio Local Server tab with Start Server — /assets/lmstudio-server.png (canonical visual on website). -->
+              </div>
+            </li>
+
+            <!-- Step 4 — LIVE detect & connect -->
+            <li id="lmStep4" class="lm-step flex gap-3 rounded-md border border-shell-700 bg-shell-850 p-3" data-state="todo">
+              <span class="lm-step-badge flex-none flex h-7 w-7 items-center justify-center rounded-full bg-shell-700 text-ink-50 text-xs font-semibold">4</span>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-medium text-ink-50">Detect &amp; connect</p>
+                <p class="mt-1 text-xs text-ink-400">Once the server's running, click below. We'll auto-fill the endpoint, find the loaded model, confirm Gemma, and run a live test.</p>
+                <div class="mt-2 flex flex-wrap items-center gap-2">
+                  <button id="lmWizardDetect" type="button"
+                          class="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-shell-900 hover:bg-brand/90 focus:outline-none focus:ring-2 focus:ring-brand/60">
+                    🔌 Detect &amp; connect
+                  </button>
+                  <span id="lmWizardStatus" class="text-xs text-ink-400" aria-live="polite"></span>
+                </div>
+              </div>
+            </li>
           </ol>
           <p class="mt-3 text-xs text-ink-400">Full walkthrough with screenshots: <a href="https://well-factually.com/#free-setup" target="_blank" rel="noopener noreferrer" class="help-link">well-factually.com local model guide</a>.</p>
-          <!-- SCREENSHOT PLACEHOLDER: optional inline LM Studio server screenshot could go here; canonical visuals live on the website guide. -->
-        </details>
+        </section>
 
         <div class="space-y-2">
           <label for="lmEndpoint" class="block text-sm font-medium text-ink-50">LM Studio endpoint</label>

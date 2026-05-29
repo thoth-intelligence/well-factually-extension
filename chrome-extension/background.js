@@ -773,9 +773,16 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
   // plaintext Anthropic / OpenAI / Gemini-native API keys; v9.5 doesn't use
   // any of them but a v9 → v9.5 upgrade leaves them lingering forever.
   // One-shot, idempotent.
-  chrome.runtime.onInstalled?.addListener(() => {
+  chrome.runtime.onInstalled?.addListener((details) => {
     try { chrome.storage.local.remove(V9_DEAD_STORAGE_KEYS).catch(() => {}); }
     catch (_e) { /* old chrome.storage promise unsupported — ignore */ }
+    // v0.8.0: on a brand-new install, open the Options page so first-time
+    // users land directly on the "Set up local fact-checking (Free)" wizard.
+    // Only on "install" (not "update"/"chrome_update") to avoid nagging on
+    // every version bump. Tiny + additive — guarded so it never throws.
+    if (details?.reason === "install") {
+      try { chrome.runtime.openOptionsPage?.(); } catch (_e) { /* ignore */ }
+    }
   });
   // Also run on every service-worker boot in case onInstalled didn't fire
   // (extension was already installed before this version).

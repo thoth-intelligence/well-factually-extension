@@ -90,8 +90,17 @@ export function sanitizeError(message, knownProjectId = "") {
   if (/\b429\b/.test(s0) || /[Rr]esource exhausted/.test(s0) || /[Rr]ate ?limit/.test(s0)) {
     // v0.7.0: friendlier copy + actionable next step. The technical
     // "raise the Gemini quota in GCP Console → IAM → Quotas" line was
-    // alarming to new users. Adding a free AI Studio key in Options
-    // routes around this entirely (Studio has its own quota pool).
+    // alarming to new users.
+    //
+    // v0.8.0: differentiate by source. If the 429 came from AI Studio, the
+    // user ALREADY has a Studio key — telling them to "add a free AI Studio
+    // key" is wrong and confusing. A Studio 429 means the free-tier ceiling
+    // is hit; the real fixes are billing or a local model.
+    if (/Studio/.test(s0)) {
+      return "Briefly paused — your free AI Studio quota is used up. Enable billing on your AI Studio key for higher limits, or run a local model in LM Studio (free, no quota). Resumes in 30 seconds.";
+    }
+    // Vertex (no Studio key configured) — suggest adding the free Studio key,
+    // which has its own separate quota pool.
     return "Briefly paused — Google's free quota is busy. Adding a free AI Studio API key in Settings gives you more room and prevents this. Resumes in 30 seconds.";
   }
   if (/\b401\b/.test(s0) || /[Aa]ccess token (?:expired|invalid)/.test(s0)) {

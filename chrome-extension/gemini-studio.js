@@ -26,7 +26,12 @@ const STUDIO_MODEL_FOR_ROLE = {
   classifier: "gemini-2.5-flash",
   chitchat:   "gemini-2.5-flash",
   citation:   "gemini-2.5-flash",
-  dossier:    "gemini-2.5-pro",
+  // v0.8.0: dossier on Flash, not Pro. gemini-2.5-pro has near-zero free-tier
+  // quota, so the pre-roll briefing 429'd and silently never appeared for
+  // free Studio users. Flash is plenty for a one-paragraph briefing and works
+  // on both free and billed tiers. Revert to "gemini-2.5-pro" if you want
+  // sharper dossiers and are on a billed key.
+  dossier:    "gemini-2.5-flash",
 };
 
 async function getStudioKey() {

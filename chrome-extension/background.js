@@ -102,10 +102,28 @@ async function getSettings() {
         // dossier route through generativelanguage.googleapis.com instead
         // of Vertex AI's `:generateContent` endpoint. Separate quota pool.
         geminiStudioKey: "",
+        // v0.8.0 tier — gates feature availability:
+        //   free       — LM Studio only; consensus suppressed even if toggled.
+        //   premium    — Vertex BYO key; consensus still suppressed.
+        //   journalist — hosted backend (our keys); consensus available.
+        // proLicense is the Stripe customer id used as the hosted-backend auth
+        // token. proIsActive is the legacy bool mirror (tier != free).
+        proTier: "free",
+        proIsActive: false,
+        proLicense: "",
       },
       resolve,
     );
   });
+}
+
+// v0.8.0: normalize stored state into a tier slug. Honors the explicit
+// proTier; falls back to the legacy proIsActive bool (→ premium) for profiles
+// saved by v0.7.0 before proTier existed.
+function effectiveTier(settings) {
+  const t = settings.proTier;
+  if (t === "premium" || t === "journalist" || t === "free") return t;
+  return settings.proIsActive ? "premium" : "free";
 }
 
 // Citation source profiles — bias-balanced sourcing kept from v9. Same five
@@ -296,6 +314,30 @@ async function callLmStudio({ endpoint, model, system, user, maxTokens = 220, te
 // v0.5.1: callers now wrap with withPrimaryTimeout so a hung fetch can't
 // wedge state.inFlight=true. The optional `signal` opt is plumbed through.
 async function callBackend({ settings, role, system, user, maxTokens, temperature, signal }) {
+  // ───────────────────────────────────────────────────────────────────────
+  // v0.8.0 Journalist tier — HOSTED routing (DESIGN-ONLY STUB, NOT WIRED UP).
+  //
+  // On the Journalist tier, classifier + consensus calls are meant to run on
+  // OUR keys via a server-side proxy (well-factually.com/api/journalist-proxy),
+  // with token metering + Stripe usage-based billing at 120% of token cost.
+  // That backend does NOT exist yet — see api/journalist-proxy.js (stub) and
+  // JOURNALIST_BACKEND.md in the website repo for the full design + the list
+  // of what still needs building (meter events, usage store, abuse limits,
+  // cost accounting).
+  //
+  // Until the hosted backend ships, a Journalist user falls through to the
+  // existing BYO Vertex / Studio / LM Studio paths below (so the tier is
+  // never WORSE than Premium). Flip USE_HOSTED_JOURNALIST_BACKEND to true and
+  // implement callJournalistHosted once the proxy is live.
+  // ───────────────────────────────────────────────────────────────────────
+  const USE_HOSTED_JOURNALIST_BACKEND = false; // TODO(journalist): set true when proxy is deployed
+  if (USE_HOSTED_JOURNALIST_BACKEND && effectiveTier(settings) === "journalist") {
+    // return callJournalistHosted({
+    //   license: settings.proLicense,  // Stripe customer id → auth + metering key
+    //   role, system, user, maxTokens, temperature, signal,
+    // });
+  }
+
   if (settings.backend === "lmstudio") {
     return callLmStudio({
       endpoint: settings.lmEndpoint,
@@ -314,7 +356,24 @@ async function callBackend({ settings, role, system, user, maxTokens, temperatur
   // factflag path didn't, so users still saw rate-limit pauses even
   // with Studio configured. This unifies the routing.
   if (await isStudioConfigured()) {
-    return callGeminiStudioPlain(role, system, user, { maxTokens, temperature, signal });
+    try {
+      return await callGeminiStudioPlain(role, system, user, { maxTokens, temperature, signal });
+    } catch (e) {
+      // v0.8.0 cross-backend fallback: if Studio is rate-limited/overloaded
+      // and a Vertex project is also configured, try Vertex rather than
+      // failing the tick. Studio's free tier exhausts fast; a configured
+      // Vertex project may still have room. Only fall back on transient
+      // quota/capacity errors — NOT on 400/403 (bad request / no access),
+      // which Vertex would reject too.
+      const msg = String(e.message || e);
+      const transient = /\b429\b|\b503\b|[Rr]esource exhausted|[Rr]ate ?limit|high demand/.test(msg);
+      const vertexReady = settings.gcpProjectId && settings.vertexBearerToken;
+      if (transient && vertexReady) {
+        const resp = await callVertex(role, toMessages(system, user), { maxTokens, temperature, signal });
+        return extractText(resp);
+      }
+      throw e;
+    }
   }
   const resp = await callVertex(role, toMessages(system, user), { maxTokens, temperature, signal });
   return extractText(resp);
@@ -413,6 +472,9 @@ Reply with the JSON verdict only.`;
 // were invisible to the aggregator — which silently inflated unanimity for
 // the surviving voices.
 async function runConsensus({ tabId, cue, primaryFlag, segmentText, settings }) {
+  // v0.8.0: consensus is a Journalist-tier feature. Even if a stale profile
+  // has consensusEnabled=true from a higher tier, suppress it below Journalist.
+  if (effectiveTier(settings) !== "journalist") return;
   if (!settings.consensusEnabled) return;
   if (primaryFlag.confidence == null || primaryFlag.confidence < 4) return;
   if (!settings.voiceLlamaEnabled && !settings.voiceGrokEnabled && !settings.voiceClaudeEnabled) return;
@@ -595,8 +657,12 @@ async function processTick(tabId) {
         .catch(() => { /* swallow — no citation, no problem */ });
     }
 
+    // v0.8.0: consensus runs on the Journalist tier (hosted backend supplies
+    // the voices) OR on the legacy vertex path for a Journalist using BYO
+    // Vertex. runConsensus itself enforces the tier gate; this is just the
+    // cheap pre-check to avoid the call setup when clearly N/A.
     if (
-      settings.backend === "vertex" &&
+      effectiveTier(settings) === "journalist" &&
       settings.consensusEnabled &&
       cleaned.confidence != null &&
       cleaned.confidence >= 4
@@ -660,6 +726,17 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
       const last = state.lines[state.lines.length - 1];
       if (!last || last.x !== msg.line.x || Math.abs(last.t - msg.line.t) > 0.5) {
         state.lines.push(msg.line);
+      }
+      // Seek handling: the tick gate (now - lastCommentT < COMMENT_EVERY_S) and
+      // the 429 cooldown (rateLimitedUntil) are keyed to video-cue time. If the
+      // user scrubs BACKWARD, `now` drops below lastCommentT so the gate stays
+      // true forever and classification silently dies; a big FORWARD skip leaves
+      // a stale cooldown. Detect a discontinuity in currentTime (anything beyond
+      // normal ~2s/poll playback) and reset both so ticks resume at the new spot.
+      const prevT = state.currentTime;
+      if (prevT != null && (msg.currentTime < prevT - 1 || msg.currentTime > prevT + 5)) {
+        state.lastCommentT = msg.currentTime - COMMENT_EVERY_S;
+        state.rateLimitedUntil = -1;
       }
       state.currentTime = msg.currentTime;
       processTick(tabId);

@@ -25,6 +25,11 @@ const els = {
   sourcePref: document.getElementById("sourcePref"),
   consensusEnabled: document.getElementById("consensusEnabled"),
   consensusVoicesSection: document.getElementById("consensus-voices-section"),
+  consensusSection: document.getElementById("consensus-section"),
+  // v0.8.0 tier UI
+  tierIndicator: document.getElementById("tierIndicator"),
+  tierVertexNote: document.getElementById("tierVertexNote"),
+  tierConsensusNote: document.getElementById("tierConsensusNote"),
   voiceLlamaEnabled: document.getElementById("voiceLlamaEnabled"),
   voiceGrokEnabled: document.getElementById("voiceGrokEnabled"),
   voiceClaudeEnabled: document.getElementById("voiceClaudeEnabled"),
@@ -61,15 +66,32 @@ const DEFAULTS = {
   voiceGrokEnabled: false,
   voiceClaudeEnabled: false,
   glossary: "",
-  // v0.7.0 Pro tier — license is the Stripe customer ID (cus_xxx).
-  // proIsActive + proExpiresAt + proValidatedAt are populated by the
-  // license-check call in background; we only need to remember the
-  // license string here so users don't have to re-paste on every load.
+  // v0.8.0 tier — license is the Stripe customer ID (cus_xxx).
+  // proTier ("free"|"premium"|"journalist") + proIsActive (legacy mirror) +
+  // proExpiresAt + proValidatedAt are populated by the license-check call;
+  // we only remember the license string so users don't re-paste every load.
   proLicense: "",
+  proTier: "free",
   proIsActive: false,
   proExpiresAt: null,
   proValidatedAt: 0,
 };
+
+// Tier display names — must match the website pricing UI exactly.
+const TIER_DISPLAY = {
+  free: "Well (f)actually Youtube Sidebar (Free)",
+  premium: "Well (f)actually Youtube Sidebar Premium",
+  journalist: "Well (f)actually Youtube Sidebar Journalist",
+};
+
+// Normalize a stored/fetched state into a tier slug. Falls back to the
+// legacy proIsActive bool (→ premium) for profiles saved by v0.7.0.
+function resolveTier(s) {
+  if (s && (s.proTier === "premium" || s.proTier === "journalist" || s.proTier === "free")) {
+    return s.proTier;
+  }
+  return s && s.proIsActive ? "premium" : "free";
+}
 // Affiliate / ad-slot defaults are NOT mutable from Options on purpose —
 // they're shipped behavior, not user toggles. content.js + affiliate.js
 // own the defaults and read them straight from chrome.storage.local
@@ -101,31 +123,77 @@ chrome.storage.local.get(DEFAULTS, (s) => {
   refreshConsensusSection();
 });
 
-// v0.7.0 Pro tier — render the Pro status line below the license input.
-// Pulls from the cached chrome.storage.local state (proIsActive,
-// proExpiresAt, proValidatedAt). The verify button below calls into
-// background.js (or fetches directly) to refresh.
+// v0.8.0 tier — render the status line below the license input AND the
+// current-plan indicator, then re-gate the UI so each tier only exposes the
+// features it's entitled to. Pulls from cached chrome.storage.local state.
 function renderProStatus(s) {
-  if (!els.proStatus) return;
-  if (!s.proLicense || !s.proLicense.trim()) {
-    els.proStatus.textContent = "Status: not configured";
-    els.proStatus.className = "text-xs text-ink-400";
-    return;
+  const tier = resolveTier(s);
+  // Current-plan indicator (always shows the active tier name).
+  if (els.tierIndicator) {
+    els.tierIndicator.textContent = TIER_DISPLAY[tier] || TIER_DISPLAY.free;
+    els.tierIndicator.dataset.tier = tier;
   }
-  if (s.proIsActive) {
+  applyTierGating(tier);
+
+  if (!els.proStatus) return;
+  if (tier !== "free") {
+    const label = tier === "journalist" ? "JOURNALIST" : "PREMIUM";
     const expires = s.proExpiresAt
       ? new Date(s.proExpiresAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
       : null;
     els.proStatus.textContent = expires
-      ? `Status: PRO — renews ${expires}`
-      : "Status: PRO — active";
+      ? `Status: ${label} — renews ${expires}`
+      : `Status: ${label} — active`;
     els.proStatus.className = "text-xs text-good";
+  } else if (!s.proLicense || !s.proLicense.trim()) {
+    els.proStatus.textContent = "Status: Free tier (local-only)";
+    els.proStatus.className = "text-xs text-ink-400";
   } else if (s.proValidatedAt) {
-    els.proStatus.textContent = "Status: code not active (cancelled or invalid)";
+    els.proStatus.textContent = "Status: code not active (cancelled or invalid) — on Free tier";
     els.proStatus.className = "text-xs text-warn";
   } else {
     els.proStatus.textContent = "Status: not yet verified — click Verify";
     els.proStatus.className = "text-xs text-ink-400";
+  }
+}
+
+// applyTierGating — show/lock features per tier in the Options UI.
+//   free       → only LM Studio backend usable; Vertex + consensus locked.
+//   premium    → LM Studio + Vertex (BYO key) usable; consensus locked.
+//   journalist → everything usable (hosted backend handles routing).
+// "Locked" = visibly disabled + an explanatory upsell note, not hidden, so
+// users understand what each upgrade unlocks.
+function applyTierGating(tier) {
+  const vertexAllowed = tier === "premium" || tier === "journalist";
+  const consensusAllowed = tier === "journalist";
+
+  // Backend dropdown: the cloud/Vertex option is only selectable on a paid
+  // tier. On Free we lock the select to LM Studio.
+  if (els.backend) {
+    const vertexOpt = [...els.backend.options].find((o) => o.value === "vertex");
+    if (vertexOpt) {
+      vertexOpt.disabled = !vertexAllowed;
+      vertexOpt.textContent = vertexAllowed
+        ? "Google Cloud Vertex AI (cloud — Gemini, optional second-opinion voices)"
+        : "Google Cloud Vertex AI — Premium/Journalist only 🔒";
+    }
+    if (!vertexAllowed && els.backend.value === "vertex") {
+      els.backend.value = "lmstudio";
+      refreshBackendSection();
+    }
+  }
+  if (els.tierVertexNote) {
+    els.tierVertexNote.classList.toggle("hidden", vertexAllowed);
+  }
+
+  // Consensus section: Journalist-only (hosted backend runs the second-opinion
+  // voices on our keys). Lock the whole section otherwise.
+  if (els.consensusEnabled) els.consensusEnabled.disabled = !consensusAllowed;
+  if (els.consensusSection) {
+    els.consensusSection.classList.toggle("tier-locked", !consensusAllowed);
+  }
+  if (els.tierConsensusNote) {
+    els.tierConsensusNote.classList.toggle("hidden", consensusAllowed);
   }
 }
 
@@ -155,9 +223,14 @@ if (els.proVerify) {
       });
       const data = await res.json();
       const now = Date.now();
+      // Prefer the new `tier` field; fall back to the legacy `pro` bool.
+      const tier = (data.tier === "premium" || data.tier === "journalist" || data.tier === "free")
+        ? data.tier
+        : (data.pro ? "premium" : "free");
       const update = {
         proLicense: license,
-        proIsActive: !!data.pro,
+        proTier: tier,
+        proIsActive: tier !== "free",
         proExpiresAt: data.expires_at || null,
         proValidatedAt: now,
       };

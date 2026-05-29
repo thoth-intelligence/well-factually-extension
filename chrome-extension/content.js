@@ -21,6 +21,7 @@
     <div class="fcs-head">
       <span class="fcs-title">🎬 Fact-Check</span>
       <span>
+        <button id="fcs-pause" title="Pause fact-checking">⏸</button>
         <button id="fcs-export" title="Export session to markdown">export</button>
         <button id="fcs-clear" title="Clear all cards">clear</button>
         <button id="fcs-toggle" title="Collapse / expand">‹</button>
@@ -73,6 +74,18 @@
   });
   $("fcs-export").addEventListener("click", exportSession);
 
+  // Pause toggle (v0.8.0): lets the user stop fact-checking a video they don't
+  // want analyzed (saves API calls + clutter) without uninstalling. While
+  // paused, onCaptionUpdate stops sending caption lines, so background.js
+  // accumulates nothing and runs no ticks. Resuming picks back up live.
+  let paused = false;
+  $("fcs-pause").addEventListener("click", () => {
+    paused = !paused;
+    $("fcs-pause").textContent = paused ? "▶" : "⏸";
+    $("fcs-pause").title = paused ? "Resume fact-checking" : "Pause fact-checking";
+    setStatus(paused ? "paused — fact-checking off" : "receiving captions…", !paused);
+  });
+
   function fmtCue(s) {
     s = Math.max(0, Math.floor(s));
     const m = Math.floor(s / 60), r = s % 60;
@@ -87,39 +100,61 @@
   function clearEmpty() { if (empty.parentNode) empty.remove(); }
 
   // ───────────────────────────────────────────────────────────────────────
-  // Pro subscription gate (v0.7.0)
+  // Subscription tier gate (v0.8.0 — supersedes the v0.7.0 proIsActive bool)
   //
   // chrome.storage.local fields managed by Options + background:
   //   proLicense       — Stripe customer ID, format cus_xxx
-  //   proIsActive      — bool, cached result of /api/license-check
+  //   proTier          — "free" | "premium" | "journalist" (from license-check)
+  //   proIsActive      — legacy bool, kept in sync (true iff tier != "free")
   //   proExpiresAt     — ISO string, subscription period end
   //   proValidatedAt   — timestamp (ms) of last successful check
   //
-  // We revalidate against well-factually.com every 24h. If proIsActive
-  // is true at content-script boot, we force affiliateSettings.enabled=
-  // false and adFrequency=0 — no Amazon tagging, no sponsored cards.
+  // Tier → feature gating (the sidebar half; background owns routing):
+  //   free       — ads ON. (LM Studio only; Vertex/consensus locked elsewhere)
+  //   premium    — ads OFF. (Cloud Gemini via BYO key; consensus still locked)
+  //   journalist — ads OFF. (Hosted backend + consensus available)
+  //
+  // We revalidate against well-factually.com every 24h. Any paid tier
+  // (premium/journalist) forces affiliateSettings.enabled=false and
+  // adFrequency=0 — no Amazon tagging, no sponsored cards.
   // ───────────────────────────────────────────────────────────────────────
   const PRO_REVALIDATE_MS = 24 * 60 * 60 * 1000; // 24h
   const PRO_LICENSE_CHECK_URL = "https://well-factually.com/api/license-check";
-  let proIsActive = false;
+  const TIER_LABELS = { free: "FREE", premium: "PREMIUM", journalist: "JOURNALIST" };
+  let proTier = "free";
+
+  // Normalize a license-check response into a tier. Accepts the new `tier`
+  // field; falls back to the legacy `pro` bool (→ "premium") for older API
+  // responses, and to "free" otherwise.
+  function tierFromResponse(data) {
+    if (data && (data.tier === "premium" || data.tier === "journalist" || data.tier === "free")) {
+      return data.tier;
+    }
+    return data && data.pro ? "premium" : "free";
+  }
 
   function applyProPill() {
     const head = root.querySelector(".fcs-head");
     if (!head) return;
     let pill = root.querySelector(".fcs-pro-pill");
-    if (proIsActive && !pill) {
-      pill = document.createElement("span");
-      pill.className = "fcs-pro-pill";
-      pill.textContent = "PRO";
-      pill.title = "Pro subscription active — sponsored cards hidden.";
-      // Inject right after .fcs-title so it sits in the header bar.
-      const title = head.querySelector(".fcs-title");
-      if (title && title.parentNode) {
-        title.parentNode.insertBefore(pill, title.nextSibling);
-      } else {
-        head.insertBefore(pill, head.firstChild);
+    const isPaid = proTier === "premium" || proTier === "journalist";
+    if (isPaid) {
+      const label = TIER_LABELS[proTier] || "PRO";
+      if (!pill) {
+        pill = document.createElement("span");
+        pill.className = "fcs-pro-pill";
+        // Inject right after .fcs-title so it sits in the header bar.
+        const title = head.querySelector(".fcs-title");
+        if (title && title.parentNode) {
+          title.parentNode.insertBefore(pill, title.nextSibling);
+        } else {
+          head.insertBefore(pill, head.firstChild);
+        }
       }
-    } else if (!proIsActive && pill) {
+      pill.textContent = label;
+      pill.title = `${label} subscription active — sponsored cards hidden.`;
+      pill.dataset.tier = proTier;
+    } else if (pill) {
       pill.remove();
     }
   }
@@ -137,8 +172,10 @@
     })
       .then((r) => r.json())
       .then((data) => {
+        const tier = tierFromResponse(data);
         chrome.storage.local.set({
-          proIsActive: !!data.pro,
+          proTier: tier,
+          proIsActive: tier !== "free",
           proExpiresAt: data.expires_at || null,
           proValidatedAt: Date.now(),
         });
@@ -179,16 +216,23 @@
         affiliateEnabled: true,
         affiliateTag: __aff ? __aff.DEFAULT_AFFILIATE_TAG : "thothintellig-20",
         adFrequency: 4,
-        // v0.7.0 Pro tier: cached state from /api/license-check. Pro
-        // overrides force affiliate OFF + adFrequency 0 below.
+        // v0.8.0 tier: cached state from /api/license-check. Any paid tier
+        // (premium/journalist) forces affiliate OFF + adFrequency 0 below.
+        // proIsActive is kept as a derived legacy mirror of (tier != free).
         proLicense: "",
+        proTier: "free",
         proIsActive: false,
         proValidatedAt: 0
       },
       (s) => {
-        proIsActive = !!s.proIsActive;
-        if (proIsActive) {
-          // Pro override — no Amazon tagging, no sponsored cards.
+        // Prefer the explicit tier; fall back to the legacy bool so a profile
+        // upgraded from v0.7.0 (which only stored proIsActive) still gates.
+        proTier = (s.proTier === "premium" || s.proTier === "journalist" || s.proTier === "free")
+          ? s.proTier
+          : (s.proIsActive ? "premium" : "free");
+        const isPaid = proTier === "premium" || proTier === "journalist";
+        if (isPaid) {
+          // Paid override — no Amazon tagging, no sponsored cards.
           affiliateSettings.enabled = false;
           affiliateSettings.tag = (__aff ? __aff.DEFAULT_AFFILIATE_TAG : "thothintellig-20");
           affiliateSettings.adFrequency = 0;
@@ -802,7 +846,7 @@
     const g = document.createElement("div");
     g.className = "fcs-ghost";
     g.dataset.cue = String(cue);
-    g.innerHTML = `<span class="fcs-cue">${fmtCue(cue)}</span><span>${kind === "gated" ? "off-topic" : "watching…"}</span>`;
+    g.innerHTML = `<span class="fcs-cue">${fmtCue(cue)}</span><span>${kind === "gated" ? "off-topic" : "✓ nothing to flag here"}</span>`;
     const gCueEl = g.querySelector(".fcs-cue");
     if (gCueEl) {
       gCueEl.classList.add("fcs-jumpable");
@@ -832,6 +876,7 @@
   let lastSentAt = 0;
 
   function onCaptionUpdate() {
+    if (paused) return;
     const text = getCaptionText();
     if (!text) return;
     const video = getVideoEl();
@@ -1016,10 +1061,10 @@
     if (changes.sourcePref) {
       paintBiasUI(changes.sourcePref.newValue);
     }
-    // v0.7.0: Pro state changes (license added/removed, verify result
+    // v0.8.0: tier state changes (license added/removed, verify result
     // arrived) → re-run loadAffiliateSettings which now also applies the
-    // Pro override + paints the PRO pill in the sidebar header.
-    if (changes.proIsActive || changes.proLicense || changes.proValidatedAt) {
+    // paid override + paints the tier pill in the sidebar header.
+    if (changes.proTier || changes.proIsActive || changes.proLicense || changes.proValidatedAt) {
       loadAffiliateSettings();
     }
   });

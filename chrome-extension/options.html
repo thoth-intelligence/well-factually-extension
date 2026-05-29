@@ -27,6 +27,12 @@
     /* Per-voice section gray-out when consensus master toggle is off. */
     .opt-voices.disabled { opacity: 0.4; pointer-events: none; }
 
+    /* v0.8.0: a section locked behind a higher tier — dim its controls but
+       leave the upsell note (.tier-note, which sits OUTSIDE the locked
+       wrapper) fully legible. */
+    .tier-locked .tier-lockable { opacity: 0.45; pointer-events: none; }
+    .hidden { display: none; }
+
     /* Make help links visually distinct from regular links — small, muted,
        with a trailing arrow. Keep keyboard-accessible. */
     .help-link {
@@ -48,6 +54,14 @@
       <span aria-hidden="true">🎬</span> Well, Factually
     </h1>
     <p class="mt-1 text-sm text-ink-400">Real-time YouTube fact-check sidebar — settings.</p>
+    <!-- v0.8.0 current-plan indicator. Populated by options.js from the
+         cached proTier. Defaults to the Free display name. -->
+    <p class="mt-3 text-xs text-ink-400">
+      Current plan:
+      <span id="tierIndicator" class="font-semibold text-brand">Well (f)actually Youtube Sidebar (Free)</span>
+      <span class="mx-1 text-ink-600">·</span>
+      <a href="https://well-factually.com/#pricing" target="_blank" rel="noopener noreferrer" class="help-link">Compare plans</a>
+    </p>
   </header>
 
   <form id="optionsForm" class="space-y-10" novalidate>
@@ -65,6 +79,13 @@
           <option value="vertex">Google Cloud Vertex AI (cloud — Gemini, optional second-opinion voices)</option>
           <option value="lmstudio">LM Studio (local — runs on your computer, no cloud, no cost)</option>
         </select>
+        <!-- v0.8.0: shown on the Free tier (options.js toggles .hidden). The
+             cloud Vertex backend is a Premium/Journalist feature. -->
+        <p id="tierVertexNote" class="hidden text-xs text-brand">
+          🔒 The cloud Gemini classifier (Vertex AI) is part of <strong>Premium</strong> and <strong>Journalist</strong>. On the free tier you run a local model via LM Studio — see the
+          <a href="https://well-factually.com/#free-setup" target="_blank" rel="noopener noreferrer" class="help-link">local model setup guide</a>, or
+          <a href="https://well-factually.com/#pricing" target="_blank" rel="noopener noreferrer" class="help-link">upgrade</a>.
+        </p>
       </div>
 
       <!-- Vertex configuration -->
@@ -128,6 +149,27 @@
       <!-- LM Studio configuration -->
       <fieldset id="backend-lmstudio" class="backend-section mt-4 rounded-lg border border-shell-700 bg-shell-850 p-4 sm:p-5 space-y-5">
         <legend class="sr-only">LM Studio configuration</legend>
+
+        <!-- v0.8.0 Free-tier onboarding: how to get a local model running.
+             Mirrors the website's #free-setup guide. Screenshot placeholders
+             are intentionally text-only here (Options is a settings page,
+             not a tutorial) — full visuals live on the website guide. -->
+        <details class="rounded-md border border-shell-700 bg-shell-800/60 p-3">
+          <summary class="cursor-pointer text-sm font-medium text-ink-50">First time? Set up a local model (free tier) ↓</summary>
+          <ol class="mt-3 space-y-2 text-xs text-ink-300 list-decimal list-inside">
+            <li>Install <a href="https://lmstudio.ai" target="_blank" rel="noopener noreferrer" class="help-link">LM Studio</a> (free; Mac / Windows / Linux).</li>
+            <li>In LM Studio's Search tab, download a model:
+              <ul class="mt-1 ml-4 list-disc space-y-1">
+                <li><span class="font-mono text-ink-100">Gemma 4 E4B</span> — lightweight default, runs on ~8GB RAM. Recommended starting point.</li>
+                <li><span class="font-mono text-ink-100">Qwen2.5-7B-Instruct</span> or <span class="font-mono text-ink-100">Llama-3.1-8B-Instruct</span> — stronger, for ≥16GB RAM / a GPU.</li>
+              </ul>
+            </li>
+            <li>Open LM Studio's <em>Local Server</em> tab, select the model, click <strong>Start Server</strong> (defaults to port 1234).</li>
+            <li>Back here: leave the endpoint below as-is, click <em>Discover loaded models</em>, pick your model, then <em>Test connection</em>.</li>
+          </ol>
+          <p class="mt-3 text-xs text-ink-400">Full walkthrough with screenshots: <a href="https://well-factually.com/#free-setup" target="_blank" rel="noopener noreferrer" class="help-link">well-factually.com local model guide</a>.</p>
+          <!-- SCREENSHOT PLACEHOLDER: optional inline LM Studio server screenshot could go here; canonical visuals live on the website guide. -->
+        </details>
 
         <div class="space-y-2">
           <label for="lmEndpoint" class="block text-sm font-medium text-ink-50">LM Studio endpoint</label>
@@ -222,16 +264,21 @@
       </div>
     </section>
 
-    <!-- Second-opinion check -->
-    <section aria-labelledby="consensus-heading">
+    <!-- Second-opinion check (consensus) — Journalist tier only -->
+    <section id="consensus-section" aria-labelledby="consensus-heading">
       <div class="mb-4">
         <h2 id="consensus-heading" class="text-sm font-semibold tracking-tight text-ink-50">Second-opinion check
-          <span class="ml-1 text-xs font-normal text-ink-500">— optional</span>
+          <span class="ml-1 text-xs font-normal text-ink-500">— Journalist</span>
         </h2>
         <p class="mt-1 text-xs text-ink-400">For high-confidence fact-flags, ask other AI models to weigh in. When 2-of-3 agree, the card gets a "consensus" badge.</p>
+        <!-- v0.8.0: shown unless on Journalist (options.js toggles .hidden). -->
+        <p id="tierConsensusNote" class="hidden mt-2 text-xs text-brand">
+          🔒 Cross-vendor consensus is a <strong>Journalist</strong> feature — we run the second-opinion voices (Llama, Grok, Claude) server-side on our keys.
+          <a href="https://well-factually.com/#pricing" target="_blank" rel="noopener noreferrer" class="help-link">Upgrade to Journalist</a>.
+        </p>
       </div>
 
-      <div class="space-y-4 rounded-lg border border-shell-700 bg-shell-850 p-4 sm:p-5">
+      <div class="tier-lockable space-y-4 rounded-lg border border-shell-700 bg-shell-850 p-4 sm:p-5">
         <div class="flex items-start gap-3">
           <input type="checkbox" id="consensusEnabled"
                  class="mt-0.5 h-4 w-4 rounded border-shell-700 bg-shell-800 text-brand focus:ring-brand/60 focus:ring-offset-shell-900">
@@ -264,13 +311,13 @@
       </div>
     </section>
 
-    <!-- Pro subscription -->
+    <!-- Subscription / license -->
     <section aria-labelledby="pro-heading">
       <div class="mb-4">
-        <h2 id="pro-heading" class="text-sm font-semibold tracking-tight text-ink-50">Pro subscription
-          <span class="ml-1 text-xs font-normal text-ink-500">— ad-free</span>
+        <h2 id="pro-heading" class="text-sm font-semibold tracking-tight text-ink-50">Subscription
+          <span class="ml-1 text-xs font-normal text-ink-500">— Premium / Journalist</span>
         </h2>
-        <p class="mt-1 text-xs text-ink-400">Subscribers see no sponsored book cards in the sidebar. Paste the license code from your subscription confirmation page to activate.</p>
+        <p class="mt-1 text-xs text-ink-400">Paste the license code from your subscription confirmation page to unlock your tier. Premium removes ads and enables the cloud Gemini classifier; Journalist additionally runs everything on our hosted backend with consensus.</p>
       </div>
 
       <div class="space-y-3 rounded-lg border border-shell-700 bg-shell-850 p-4 sm:p-5">

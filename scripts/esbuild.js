@@ -62,7 +62,7 @@ const COMMON = {
   // reviewer can see what they're looking at without reading the
   // mangled body. legalComments:"none" still strips author/license
   // comments inside dependency graphs.
-  banner: { js: `/* Well, Factually extension v${VERSION} — minified bundle. Source: github.com/zangiku/well-factually-extension */` }
+  banner: { js: `/* Well, Factually extension v${VERSION} — minified bundle. Source: github.com/thoth-intelligence/well-factually-extension */` }
 };
 
 console.log(`esbuild: bundling v${VERSION} → ${path.relative(ROOT, OUT)}`);
